@@ -9,7 +9,7 @@
         Width="1280"
         Height="800">
     <DockPanel>
-        <!-- ── Menu bar ─────────────────────────────────────────────────────── -->
+        <!-- Menu bar -->
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
                 <MenuItem Header="_New Map"  Command="{Binding NewMapCommand}"  InputGesture="Ctrl+N" />
@@ -49,7 +49,7 @@
             </MenuItem>
         </Menu>
 
-        <!-- ── Status bar ──────────────────────────────────────────────────── -->
+        <!-- Status bar -->
         <Border DockPanel.Dock="Bottom"
                 Background="#1e1e30"
                 Padding="8,4"
@@ -58,7 +58,7 @@
             <TextBlock Text="{Binding StatusText}" Foreground="#aaa" FontSize="12" />
         </Border>
 
-        <!-- ── Left tool strip ─────────────────────────────────────────────── -->
+        <!-- Left tool strip -->
         <Border DockPanel.Dock="Left"
                 Background="#252535"
                 Width="44"
@@ -73,7 +73,7 @@
                         Click="OnSelectPan"
                         Background="{Binding Tools.IsPanActive, Converter={StaticResource BoolToActiveButtonConverter}}"
                         Padding="4">
-                    <TextBlock Text="&#x1F�" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <TextBlock Text="Pan" FontSize="9" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#ccc" />
                 </Button>
                 <!-- Paint Brush -->
                 <Button Width="36" Height="36"
@@ -135,7 +135,7 @@
             </StackPanel>
         </Border>
 
-        <!-- ── Main content area ────────────────────────────────────────────── -->
+        <!-- Main content area -->
         <Grid ColumnDefinitions="*,240">
             <!-- Viewport -->
             <Border Grid.Column="0"
@@ -157,7 +157,7 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Spacing="12">
 
-                        <!-- Brush Options (shown when a brush tool is active) -->
+                        <!-- Brush Options -->
                         <StackPanel IsVisible="{Binding Tools.ShowBrushOptions}" Spacing="6">
                             <TextBlock Text="Brush" FontWeight="Bold" Foreground="#ccc" FontSize="12" />
                             <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" HorizontalAlignment="Stretch">
@@ -179,7 +179,7 @@
                             </Grid>
                         </StackPanel>
 
-                        <!-- Flatten Z (shown only for flatten tool) -->
+                        <!-- Flatten Z -->
                         <StackPanel IsVisible="{Binding Tools.ShowFlattenOptions}" Spacing="4">
                             <TextBlock Text="Target Z" Foreground="#aaa" FontSize="11" />
                             <NumericUpDown Minimum="-128" Maximum="127"
