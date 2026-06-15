@@ -103,7 +103,9 @@ public partial class SettingsDialog : Window
         Close(null);
     }
 
-    public static async Task<AppPreferences?> ShowDialog(Window owner)
+    // 'new' suppresses CS0108: this intentionally hides Window.ShowDialog(Window)
+    // with a typed convenience overload that returns AppPreferences? directly.
+    public static new async Task<AppPreferences?> ShowDialog(Window owner)
     {
         var prefs = AppPreferences.Load();
         var dialog = new SettingsDialog(prefs);

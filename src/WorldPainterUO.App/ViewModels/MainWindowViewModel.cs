@@ -168,9 +168,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ? b.Definition.Tiles[0].TileId
             : (ushort)3;
 
-        // Both Raise and Lower take a positive sbyte amount; Lower negates internally.
-        var amount = (sbyte)Math.Clamp((int)(t.BrushStrength * 5), 1, 10);
-
         ICommand? cmd = t.ActiveTool switch
         {
             // PaintBrushTool: (map, cx, cy, tileId, radius, opacity, hardness, seed, selection?)
@@ -187,13 +184,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ActiveTool.Fill when t.ActiveBiome is not null =>
                 FillTool.Execute(_map, tileX, tileY, tileId),
 
-            // RaiseTool: (map, cx, cy, radius, amount, selection?)
+            // RaiseTool: (map, cx, cy, radius, sbyte amount, selection?)
+            // Convert.ToSByte guarantees sbyte narrowing without implicit int overflow.
             ActiveTool.Raise =>
-                RaiseTool.Execute(_map, tileX, tileY, t.BrushRadius, amount),
+                RaiseTool.Execute(_map, tileX, tileY, t.BrushRadius,
+                    Convert.ToSByte(Math.Clamp((int)(t.BrushStrength * 5), 1, 10))),
 
-            // LowerTool: same signature — takes positive amount and subtracts internally
+            // LowerTool: same signature — takes positive sbyte, subtracts internally.
             ActiveTool.Lower =>
-                LowerTool.Execute(_map, tileX, tileY, t.BrushRadius, amount),
+                LowerTool.Execute(_map, tileX, tileY, t.BrushRadius,
+                    Convert.ToSByte(Math.Clamp((int)(t.BrushStrength * 5), 1, 10))),
 
             // SmoothTool: (map, cx, cy, radius, selection?) — no strength param
             ActiveTool.Smooth =>
