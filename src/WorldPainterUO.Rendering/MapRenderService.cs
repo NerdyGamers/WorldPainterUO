@@ -11,6 +11,7 @@ public sealed class MapRenderService
 {
     private readonly FallbackTileTextureProvider _tileProvider = new();
     private readonly RenderCache _cache = new();
+    private readonly RadarColorPalette _radar = new();
 
     public ViewMode ViewMode { get; set; } = ViewMode.Radar;
 
@@ -25,6 +26,22 @@ public sealed class MapRenderService
 
     public bool ShowTileGrid { get; set; }
     public bool ShowChunkGrid { get; set; }
+
+    /// <summary>
+    /// Attempts to load radarcol.mul from the given UO data directory.
+    /// Safe to call at any time; invalidates all cached chunks on success.
+    /// </summary>
+    public bool TryLoadRadarColors(string? uoDataPath)
+    {
+        if (string.IsNullOrWhiteSpace(uoDataPath))
+            return false;
+
+        var loaded = _radar.TryLoad(uoDataPath);
+        if (loaded)
+            _cache.InvalidateAll();
+
+        return loaded;
+    }
 
     /// <summary>Consumes dirty flags from the map and marks chunks for re-render.</summary>
     public void SyncDirtyChunks(WorldMap map) => _cache.SyncDirtyChunks(map);
@@ -99,8 +116,6 @@ public sealed class MapRenderService
 
     /// <summary>
     /// Direct tile-by-tile rendering for very zoomed-out views.
-    /// Writes each tile as a single pixel to a viewport-sized bitmap,
-    /// avoiding OOM from creating millions of chunk bitmaps.
     /// </summary>
     private void RenderDirect(SKCanvas canvas, WorldMap map, MapDimensions dims,
         float zoom, int width, int height)
@@ -121,7 +136,7 @@ public sealed class MapRenderService
 
                 var id = map.Terrain[tileX, tileY];
                 var z = map.Height[tileX, tileY];
-                var color = RadarColorPalette.GetColor(id);
+                var color = _radar.GetColor(id);
                 var heightFactor = Math.Clamp((z + 100) / 227.0f, 0.3f, 1.0f);
 
                 bmp.SetPixel(px, py, new SKColor(
@@ -137,14 +152,12 @@ public sealed class MapRenderService
     private SKBitmap RenderChunk(WorldMap map, int cx, int cy)
     {
         var size = MapChunk<ushort>.Size;
-        var bmp = new SKBitmap(size * 4, size * 4); // Each tile rendered at 4x4 for quality
+        var bmp = new SKBitmap(size * 4, size * 4);
         var tilePx = 4;
 
         using var chunkCanvas = new SKCanvas(bmp);
         var terrainChunk = map.Terrain.GetChunk(cx, cy);
         var heightChunk = map.Height.GetChunk(cx, cy);
-        var tileX = cx * size;
-        var tileY = cy * size;
 
         for (var ly = 0; ly < size; ly++)
         {
@@ -174,9 +187,8 @@ public sealed class MapRenderService
 
                     case ViewMode.Hybrid:
                     {
-                        // Terrain fallback, then radar tint
                         _tileProvider.RenderFallbackTile(chunkCanvas, px, py, tilePx, id, z);
-                        var radar = RadarColorPalette.GetColor(id);
+                        var radar = _radar.GetColor(id);
                         using var tint = new SKPaint
                         {
                             Color = new SKColor(radar.Red, radar.Green, radar.Blue, 60),
@@ -188,7 +200,7 @@ public sealed class MapRenderService
 
                     default: // Radar
                     {
-                        var color = RadarColorPalette.GetColor(id);
+                        var color = _radar.GetColor(id);
                         var heightFactor = (z + 100) / 227.0f;
                         heightFactor = Math.Clamp(heightFactor, 0.3f, 1.0f);
                         using var paint = new SKPaint

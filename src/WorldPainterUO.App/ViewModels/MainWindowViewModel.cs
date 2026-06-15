@@ -29,6 +29,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
             new LayerItem("Terrain", true),
             new LayerItem("Height", true),
         ];
+
+        // Load radar colors from saved UO data path on startup
+        var prefs = AppPreferences.Load();
+        RenderService.TryLoadRadarColors(prefs.UoDataPath);
+        MinimapRenderer.TryLoadRadarColors(prefs.UoDataPath);
     }
 
     public RecentFiles RecentFiles { get; }
@@ -124,6 +129,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public event Action? RequestNewMap;
     public event Action? RequestOpenMap;
+
+    /// <summary>
+    /// Called when the user changes the UO data path in preferences.
+    /// Reloads radar colors and re-renders.
+    /// </summary>
+    public void ApplyUoDataPath(string? path)
+    {
+        RenderService.TryLoadRadarColors(path);
+        MinimapRenderer.TryLoadRadarColors(path);
+        RenderService.InvalidateAll();
+        MinimapRenderer.Invalidate();
+    }
 
     [RelayCommand]
     private void NewMap()
