@@ -1,9 +1,12 @@
 using System;
 using System.Collections.ObjectModel;
+
 using Avalonia;
 using Avalonia.Styling;
+
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+
 using WorldPainterUO.App.Configuration;
 using WorldPainterUO.Core;
 using WorldPainterUO.Editor;
@@ -100,13 +103,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public string ZoomPercent => $"{_zoom * 100:F0}%";
 
-    public int TileX     { get => _tileX;  private set => SetProperty(ref _tileX, value);  }
-    public int TileY     { get => _tileY;  private set => SetProperty(ref _tileY, value);  }
+    public int TileX { get => _tileX; private set => SetProperty(ref _tileX, value); }
+    public int TileY { get => _tileY; private set => SetProperty(ref _tileY, value); }
     public ushort TileId { get => _tileId; private set => SetProperty(ref _tileId, value); }
-    public sbyte TileZ   { get => _tileZ;  private set => SetProperty(ref _tileZ, value);  }
+    public sbyte TileZ { get => _tileZ; private set => SetProperty(ref _tileZ, value); }
 
-    public MapRenderService RenderService   { get; } = new();
-    public MinimapRenderer  MinimapRenderer { get; } = new();
+    public MapRenderService RenderService { get; } = new();
+    public MinimapRenderer MinimapRenderer { get; } = new();
 
     public ViewMode ViewMode
     {
@@ -125,9 +128,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
-    public bool IsRadarMode   => _viewMode == ViewMode.Radar;
+    public bool IsRadarMode => _viewMode == ViewMode.Radar;
     public bool IsTerrainMode => _viewMode == ViewMode.Terrain;
-    public bool IsHybridMode  => _viewMode == ViewMode.Hybrid;
+    public bool IsHybridMode => _viewMode == ViewMode.Hybrid;
 
     public bool ShowTileGrid
     {
@@ -147,8 +150,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ? "No map loaded"
         : $"Tile: ({_tileX}, {_tileY})  ID: 0x{_tileId:X4}  Z: {_tileZ,4}  Zoom: {ZoomPercent}";
 
-    public bool CanUndo    => History.CanUndo;
-    public bool CanRedo    => History.CanRedo;
+    public bool CanUndo => History.CanUndo;
+    public bool CanRedo => History.CanRedo;
     public string UndoLabel => History.UndoDescription is string d ? $"Undo: {d}" : "Undo";
     public string RedoLabel => History.RedoDescription is string d ? $"Redo: {d}" : "Redo";
 
@@ -205,7 +208,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
             // NoiseTool: (map, cx, cy, radius, magnitude)
             ActiveTool.Noise =>
-                NoiseTool.Execute(_map, tileX, tileY, t.BrushRadius, (int)(t.BrushStrength * 10)),
+                NoiseTool.Execute(_map, tileX, tileY, t.BrushRadius, (sbyte)(t.BrushStrength * 10)),
 
             // ReplaceTool: (map, findTileId, replaceTileId, bounds?, selection?)
             ActiveTool.Replace when t.ActiveBiome is not null =>
@@ -258,7 +261,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             switch (layer.Name)
             {
                 case "Terrain": RenderService.TerrainVisible = layer.Visible; break;
-                case "Height":  RenderService.HeightVisible  = layer.Visible; break;
+                case "Height": RenderService.HeightVisible = layer.Visible; break;
             }
         }
         RenderService.InvalidateAll();
@@ -285,7 +288,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     // ── Commands ──────────────────────────────────────────────────────────────
 
-    [RelayCommand] private void NewMap()  => RequestNewMap?.Invoke();
+    [RelayCommand] private void NewMap() => RequestNewMap?.Invoke();
     [RelayCommand] private void OpenMap() => RequestOpenMap?.Invoke();
 
     [RelayCommand]
@@ -302,8 +305,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (History.Redo(_map)) { RenderService.InvalidateAll(); MinimapRenderer.Invalidate(); }
     }
 
-    [RelayCommand] private void ZoomIn()    { Zoom *= 2.0; OnPropertyChanged(nameof(StatusText)); }
-    [RelayCommand] private void ZoomOut()   { Zoom /= 2.0; OnPropertyChanged(nameof(StatusText)); }
+    [RelayCommand] private void ZoomIn() { Zoom *= 2.0; OnPropertyChanged(nameof(StatusText)); }
+    [RelayCommand] private void ZoomOut() { Zoom /= 2.0; OnPropertyChanged(nameof(StatusText)); }
     [RelayCommand] private void ResetZoom() { Zoom = 1.0; OffsetX = 0; OffsetY = 0; OnPropertyChanged(nameof(StatusText)); }
 
     // ── Map interaction ───────────────────────────────────────────────────────
@@ -326,7 +329,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Zoom = 1.0;
         }
 
-        OffsetX = -(map.Dimensions.Width  - viewportWidth  / _zoom) / 2;
+        OffsetX = -(map.Dimensions.Width - viewportWidth / _zoom) / 2;
         OffsetY = -(map.Dimensions.Height - viewportHeight / _zoom) / 2;
 
         RenderService.Zoom = (float)_zoom;
@@ -343,7 +346,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (tileX >= 0 && tileY >= 0 && tileX < _map.Dimensions.Width && tileY < _map.Dimensions.Height)
         {
             TileId = _map.Terrain[tileX, tileY];
-            TileZ  = _map.Height[tileX, tileY];
+            TileZ = _map.Height[tileX, tileY];
         }
         OnPropertyChanged(nameof(StatusText));
     }
