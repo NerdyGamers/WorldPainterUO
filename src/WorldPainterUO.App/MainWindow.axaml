@@ -3,15 +3,16 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:WorldPainterUO.App.ViewModels"
-        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="WorldPainterUO.App.MainWindow"
         Title="{Binding Title}"
-        Width="1200"
+        Width="1280"
         Height="800">
     <DockPanel>
+        <!-- ── Menu bar ─────────────────────────────────────────────────────── -->
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
-                <MenuItem Header="_New Map" Command="{Binding NewMapCommand}" InputGesture="Ctrl+N" />
+                <MenuItem Header="_New Map"  Command="{Binding NewMapCommand}"  InputGesture="Ctrl+N" />
                 <MenuItem Header="_Open..." Command="{Binding OpenMapCommand}" InputGesture="Ctrl+O" />
                 <MenuItem Header="_Recent" x:Name="RecentMenu"
                           ItemsSource="{Binding RecentFiles.Entries}">
@@ -27,46 +28,115 @@
                 <MenuItem Header="E_xit" Click="OnExit" />
             </MenuItem>
 
+            <MenuItem Header="_Edit">
+                <MenuItem Header="{Binding UndoLabel}" Command="{Binding UndoCommand}" InputGesture="Ctrl+Z" />
+                <MenuItem Header="{Binding RedoLabel}" Command="{Binding RedoCommand}" InputGesture="Ctrl+Y" />
+            </MenuItem>
+
             <MenuItem Header="_View">
-                <!-- View Mode -->
                 <MenuItem Header="Render Mode">
-                    <MenuItem Header="_Radar View"
-                              Click="OnSetRadarMode"
-                              Icon="{Binding IsRadarMode, Converter={StaticResource BoolToCheckConverter}}" />
-                    <MenuItem Header="_Terrain View"
-                              Click="OnSetTerrainMode"
-                              Icon="{Binding IsTerrainMode, Converter={StaticResource BoolToCheckConverter}}" />
-                    <MenuItem Header="_Hybrid View"
-                              Click="OnSetHybridMode"
-                              Icon="{Binding IsHybridMode, Converter={StaticResource BoolToCheckConverter}}" />
+                    <MenuItem Header="_Radar View"   Click="OnSetRadarMode" />
+                    <MenuItem Header="_Terrain View" Click="OnSetTerrainMode" />
+                    <MenuItem Header="_Hybrid View"  Click="OnSetHybridMode" />
                 </MenuItem>
                 <Separator />
-                <!-- Grid overlays -->
-                <MenuItem Header="Show _Tile Grid"
-                          Click="OnToggleTileGrid"
-                          InputGesture="Ctrl+G" />
-                <MenuItem Header="Show _Chunk Grid"
-                          Click="OnToggleChunkGrid"
-                          InputGesture="Ctrl+Shift+G" />
+                <MenuItem Header="Show _Tile Grid"  Click="OnToggleTileGrid"  InputGesture="Ctrl+G" />
+                <MenuItem Header="Show _Chunk Grid" Click="OnToggleChunkGrid" InputGesture="Ctrl+Shift+G" />
                 <Separator />
-                <!-- Zoom -->
-                <MenuItem Header="Zoom _In"  Command="{Binding ZoomInCommand}"  InputGesture="Ctrl+OemPlus" />
-                <MenuItem Header="Zoom _Out" Command="{Binding ZoomOutCommand}" InputGesture="Ctrl+OemMinus" />
+                <MenuItem Header="Zoom _In"    Command="{Binding ZoomInCommand}"    InputGesture="Ctrl+OemPlus" />
+                <MenuItem Header="Zoom _Out"   Command="{Binding ZoomOutCommand}"   InputGesture="Ctrl+OemMinus" />
                 <MenuItem Header="_Reset Zoom" Command="{Binding ResetZoomCommand}" InputGesture="Ctrl+D0" />
             </MenuItem>
         </Menu>
 
+        <!-- ── Status bar ──────────────────────────────────────────────────── -->
         <Border DockPanel.Dock="Bottom"
                 Background="#1e1e30"
                 Padding="8,4"
                 BorderBrush="#333"
                 BorderThickness="0,1,0,0">
-            <TextBlock Text="{Binding StatusText}"
-                       Foreground="#aaa"
-                       FontSize="12" />
+            <TextBlock Text="{Binding StatusText}" Foreground="#aaa" FontSize="12" />
         </Border>
 
-        <Grid ColumnDefinitions="*,220">
+        <!-- ── Left tool strip ─────────────────────────────────────────────── -->
+        <Border DockPanel.Dock="Left"
+                Background="#252535"
+                Width="44"
+                BorderBrush="#444"
+                BorderThickness="0,0,1,0"
+                Padding="2">
+            <StackPanel Spacing="2">
+                <!-- Pan -->
+                <Button x:Name="BtnPan"
+                        Width="36" Height="36"
+                        ToolTip.Tip="Pan (V)"
+                        Click="OnSelectPan"
+                        Background="{Binding Tools.IsPanActive, Converter={StaticResource BoolToActiveButtonConverter}}"
+                        Padding="4">
+                    <TextBlock Text="&#x1F�" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+                <!-- Paint Brush -->
+                <Button Width="36" Height="36"
+                        ToolTip.Tip="Paint Brush (B)"
+                        Click="OnSelectPaint"
+                        Background="{Binding Tools.IsPaintActive, Converter={StaticResource BoolToActiveButtonConverter}}"
+                        Padding="4">
+                    <TextBlock Text="&#x1F58C;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+                <!-- Fill -->
+                <Button Width="36" Height="36"
+                        ToolTip.Tip="Fill (F)"
+                        Click="OnSelectFill"
+                        Background="{Binding Tools.IsFillActive, Converter={StaticResource BoolToActiveButtonConverter}}"
+                        Padding="4">
+                    <TextBlock Text="&#x25A0;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+                <Separator Height="1" Background="#444" Margin="2,4" />
+                <!-- Raise -->
+                <Button Width="36" Height="36"
+                        ToolTip.Tip="Raise Height (R)"
+                        Click="OnSelectRaise"
+                        Background="{Binding Tools.IsRaiseActive, Converter={StaticResource BoolToActiveButtonConverter}}"
+                        Padding="4">
+                    <TextBlock Text="&#x25B2;" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+                <!-- Lower -->
+                <Button Width="36" Height="36"
+                        ToolTip.Tip="Lower Height (L)"
+                        Click="OnSelectLower"
+                        Background="{Binding Tools.IsLowerActive, Converter={StaticResource BoolToActiveButtonConverter}}"
+                        Padding="4">
+                    <TextBlock Text="&#x25BC;" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+                <!-- Smooth -->
+                <Button Width="36" Height="36"
+                        ToolTip.Tip="Smooth Height (S)"
+                        Click="OnSelectSmooth"
+                        Background="{Binding Tools.IsSmoothActive, Converter={StaticResource BoolToActiveButtonConverter}}"
+                        Padding="4">
+                    <TextBlock Text="&#x223C;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+                <!-- Flatten -->
+                <Button Width="36" Height="36"
+                        ToolTip.Tip="Flatten Height (G)"
+                        Click="OnSelectFlatten"
+                        Background="{Binding Tools.IsFlattenActive, Converter={StaticResource BoolToActiveButtonConverter}}"
+                        Padding="4">
+                    <TextBlock Text="&#x2015;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+                <!-- Noise -->
+                <Button Width="36" Height="36"
+                        ToolTip.Tip="Noise (N)"
+                        Click="OnSelectNoise"
+                        Background="{Binding Tools.IsNoiseActive, Converter={StaticResource BoolToActiveButtonConverter}}"
+                        Padding="4">
+                    <TextBlock Text="&#x2248;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!-- ── Main content area ────────────────────────────────────────────── -->
+        <Grid ColumnDefinitions="*,240">
             <!-- Viewport -->
             <Border Grid.Column="0"
                     Background="#1a1a2e"
@@ -84,37 +154,110 @@
 
             <!-- Right Panel -->
             <Border Grid.Column="1" Background="#2d2d3f" Padding="8">
-                <StackPanel Spacing="16">
-                    <TextBlock Text="Layers" FontWeight="Bold" Foreground="#ccc" />
-                    <ItemsControl ItemsSource="{Binding Layers}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <CheckBox IsChecked="{Binding Visible}"
-                                          Content="{Binding Name}"
-                                          Foreground="#ccc"
-                                          Margin="0,2" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="12">
 
-                    <Separator />
+                        <!-- Brush Options (shown when a brush tool is active) -->
+                        <StackPanel IsVisible="{Binding Tools.ShowBrushOptions}" Spacing="6">
+                            <TextBlock Text="Brush" FontWeight="Bold" Foreground="#ccc" FontSize="12" />
+                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" HorizontalAlignment="Stretch">
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Size" Foreground="#aaa" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <Slider  Grid.Row="0" Grid.Column="1"
+                                         Minimum="1" Maximum="64"
+                                         Value="{Binding Tools.BrushRadius}"
+                                         TickFrequency="1" IsSnapToTickEnabled="True" />
 
-                    <TextBlock Text="Minimap" FontWeight="Bold" Foreground="#ccc" />
-                    <Border Background="#1a1a2e"
-                            Width="180"
-                            Height="180"
-                            CornerRadius="4">
-                        <Image x:Name="MinimapImage" Stretch="Uniform" />
-                    </Border>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Strength" Foreground="#aaa" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <Slider  Grid.Row="1" Grid.Column="1"
+                                         Minimum="0.01" Maximum="1.0"
+                                         Value="{Binding Tools.BrushStrength}" />
 
-                    <Separator />
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Hardness" Foreground="#aaa" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <Slider  Grid.Row="2" Grid.Column="1"
+                                         Minimum="0.1" Maximum="1.0"
+                                         Value="{Binding Tools.BrushHardness}" />
+                            </Grid>
+                        </StackPanel>
 
-                    <TextBlock Text="Tile Info" FontWeight="Bold" Foreground="#ccc" />
-                    <TextBlock Text="{Binding StatusText}"
-                               Foreground="#aaa"
-                               FontSize="11"
-                               TextWrapping="Wrap" />
-                </StackPanel>
+                        <!-- Flatten Z (shown only for flatten tool) -->
+                        <StackPanel IsVisible="{Binding Tools.ShowFlattenOptions}" Spacing="4">
+                            <TextBlock Text="Target Z" Foreground="#aaa" FontSize="11" />
+                            <NumericUpDown Minimum="-128" Maximum="127"
+                                           Value="{Binding Tools.FlattenZ}"
+                                           Foreground="#ccc" Background="#1e1e30" />
+                        </StackPanel>
+
+                        <!-- Biome Palette -->
+                        <StackPanel IsVisible="{Binding Tools.ShowBiomePalette}" Spacing="6">
+                            <TextBlock Text="Terrain" FontWeight="Bold" Foreground="#ccc" FontSize="12" />
+                            <ItemsControl ItemsSource="{Binding Tools.Biomes}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Width="48" Height="44"
+                                                Margin="2"
+                                                Padding="2"
+                                                ToolTip.Tip="{Binding Name}"
+                                                Click="OnBiomeSelected"
+                                                Tag="{Binding Name}"
+                                                BorderThickness="2"
+                                                BorderBrush="{Binding Name, Converter={StaticResource BiomeActiveConverter}, ConverterParameter={Binding $parent[Window].DataContext.Tools.ActiveBiomeName}}">
+                                            <StackPanel Spacing="1">
+                                                <Border Width="36" Height="24"
+                                                        CornerRadius="2"
+                                                        Background="{Binding DisplayColor, Converter={StaticResource ColorToBrushConverter}}" />
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="8"
+                                                           Foreground="#ccc"
+                                                           HorizontalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <Separator Background="#444" />
+
+                        <!-- Layers -->
+                        <TextBlock Text="Layers" FontWeight="Bold" Foreground="#ccc" FontSize="12" />
+                        <ItemsControl ItemsSource="{Binding Layers}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsChecked="{Binding Visible}"
+                                              Content="{Binding Name}"
+                                              Foreground="#ccc"
+                                              Margin="0,2" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Separator Background="#444" />
+
+                        <!-- Minimap -->
+                        <TextBlock Text="Minimap" FontWeight="Bold" Foreground="#ccc" FontSize="12" />
+                        <Border Background="#1a1a2e"
+                                Width="200"
+                                Height="160"
+                                CornerRadius="4">
+                            <Image x:Name="MinimapImage" Stretch="Uniform" />
+                        </Border>
+
+                        <Separator Background="#444" />
+
+                        <!-- Tile Info -->
+                        <TextBlock Text="Tile Info" FontWeight="Bold" Foreground="#ccc" FontSize="12" />
+                        <TextBlock Text="{Binding StatusText}"
+                                   Foreground="#aaa"
+                                   FontSize="11"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </ScrollViewer>
             </Border>
         </Grid>
     </DockPanel>

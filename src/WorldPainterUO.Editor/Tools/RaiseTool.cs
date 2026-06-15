@@ -3,8 +3,8 @@ using WorldPainterUO.Editor.Selection;
 
 namespace WorldPainterUO.Editor.Tools;
 
-/// <summary>Increases Z values for tiles under a circular brush.</summary>
-public sealed class RaiseTool
+/// <summary>Increases Z values within a circular brush area.</summary>
+public static class RaiseTool
 {
     public static ICommand? Execute(
         WorldMap map,
@@ -17,14 +17,12 @@ public sealed class RaiseTool
             .Where(t => selection is null || selection.Contains(t.X, t.Y))
             .ToList();
 
-        if (tiles.Count == 0)
-            return null;
+        if (tiles.Count == 0) return null;
 
         return MapEditCommand.Create(
             $"Raise +{amount}",
-            map,
-            tiles,
-            (origId, origZ) => (origId, (sbyte)Math.Clamp(origZ + amount, sbyte.MinValue, sbyte.MaxValue)),
+            map, tiles,
+            (id, z) => (id, (sbyte)Math.Clamp(z + amount, -128, 127)),
             modifiesTerrain: false,
             modifiesHeight: true);
     }

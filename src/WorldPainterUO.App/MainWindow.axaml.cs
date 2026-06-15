@@ -3,6 +3,7 @@ using System.IO;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
@@ -18,8 +19,15 @@ namespace WorldPainterUO.App;
 
 public partial class MainWindow : Window
 {
+    // Pan state
     private bool _isPanning;
     private Point _lastPanPoint;
+
+    // Paint-drag state (apply tool continuously while dragging)
+    private bool _isPainting;
+    private int _lastPaintTileX = -1;
+    private int _lastPaintTileY = -1;
+
     private bool _needsRender = true;
     private Bitmap? _prevViewport;
     private Bitmap? _prevMinimap;
@@ -46,6 +54,9 @@ public partial class MainWindow : Window
                 _needsRender = true;
             }
         };
+
+        // Keyboard shortcuts for tools
+        KeyDown += OnWindowKeyDown;
 
         Loaded += async (_, _) =>
         {
@@ -81,6 +92,27 @@ public partial class MainWindow : Window
     }
 
     public MainWindowViewModel ViewModel { get; }
+
+    // ── Keyboard shortcuts ────────────────────────────────────────────────────
+
+    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
+    {
+        // Tool hotkeys (only when no text field is focused)
+        if (FocusManager?.GetFocusedElement() is TextBox or NumericUpDown)
+            return;
+
+        switch (e.Key)
+        {
+            case Key.V: ViewModel.Tools.SelectPanCommand.Execute(null);     break;
+            case Key.B: ViewModel.Tools.SelectPaintCommand.Execute(null);   break;
+            case Key.F: ViewModel.Tools.SelectFillCommand.Execute(null);    break;
+            case Key.R: ViewModel.Tools.SelectRaiseCommand.Execute(null);   break;
+            case Key.L: ViewModel.Tools.SelectLowerCommand.Execute(null);   break;
+            case Key.S: ViewModel.Tools.SelectSmoothCommand.Execute(null);  break;
+            case Key.G: ViewModel.Tools.SelectFlattenCommand.Execute(null); break;
+            case Key.N: ViewModel.Tools.SelectNoiseCommand.Execute(null);   break;
+        }
+    }
 
     // ── Menu handlers ─────────────────────────────────────────────────────────
 
@@ -118,6 +150,33 @@ public partial class MainWindow : Window
     {
         ViewModel.ShowChunkGrid = !ViewModel.ShowChunkGrid;
         _needsRender = true;
+    }
+
+    // ── Tool strip button handlers ────────────────────────────────────────────
+
+    private void OnSelectPan(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ViewModel.Tools.SelectPanCommand.Execute(null);
+    private void OnSelectPaint(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ViewModel.Tools.SelectPaintCommand.Execute(null);
+    private void OnSelectFill(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ViewModel.Tools.SelectFillCommand.Execute(null);
+    private void OnSelectRaise(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ViewModel.Tools.SelectRaiseCommand.Execute(null);
+    private void OnSelectLower(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ViewModel.Tools.SelectLowerCommand.Execute(null);
+    private void OnSelectSmooth(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ViewModel.Tools.SelectSmoothCommand.Execute(null);
+    private void OnSelectFlatten(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ViewModel.Tools.SelectFlattenCommand.Execute(null);
+    private void OnSelectNoise(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ViewModel.Tools.SelectNoiseCommand.Execute(null);
+
+    // ── Biome selection ───────────────────────────────────────────────────────
+
+    private void OnBiomeSelected(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string biomeName })
+            ViewModel.Tools.ActiveBiomeName = biomeName;
     }
 
     // ── Map open/new ──────────────────────────────────────────────────────────
@@ -167,7 +226,7 @@ public partial class MainWindow : Window
     {
         if (sender is not MenuItem { DataContext: RecentFileEntry entry }) return;
 
-        if (!File.Exists(entry.Path))
+        if (!System.IO.File.Exists(entry.Path))
         {
             await MessageBox.ShowDialog(this, $"File not found:\n{entry.Path}", "Open Error");
             ViewModel.RecentFiles.Entries.Remove(entry);
@@ -236,7 +295,7 @@ public partial class MainWindow : Window
 
         try
         {
-            var bmp = ViewModel.MinimapRenderer.GetOrRender(ViewModel.Map, 180);
+            var bmp = ViewModel.MinimapRenderer.GetOrRender(ViewModel.Map, 200);
             using var image = SKImage.FromBitmap(bmp);
             using var data  = image.Encode(SKEncodedImageFormat.Png, 80);
             using var ms    = new MemoryStream(data.ToArray());
@@ -258,6 +317,7 @@ public partial class MainWindow : Window
         if (ViewModel.Map is null) return;
 
         var pos = e.GetPosition(ViewportBorder);
+        ViewModel.UpdateMousePosition(pos.X, pos.Y);
 
         if (_isPanning)
         {
@@ -269,7 +329,20 @@ public partial class MainWindow : Window
             return;
         }
 
-        ViewModel.UpdateMousePosition(pos.X, pos.Y);
+        if (_isPainting)
+        {
+            var tileX = (int)((pos.X / ViewModel.Zoom) - ViewModel.OffsetX);
+            var tileY = (int)((pos.Y / ViewModel.Zoom) - ViewModel.OffsetY);
+
+            // Only fire if tile changed (avoid redundant edits on same tile)
+            if (tileX != _lastPaintTileX || tileY != _lastPaintTileY)
+            {
+                _lastPaintTileX = tileX;
+                _lastPaintTileY = tileY;
+                if (ViewModel.ApplyTool(tileX, tileY))
+                    _needsRender = true;
+            }
+        }
     }
 
     private void OnViewportPointerWheelChanged(object? sender, PointerWheelEventArgs e)
@@ -283,18 +356,48 @@ public partial class MainWindow : Window
     private void OnViewportPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (ViewModel.Map is null) return;
-        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+
+        var point = e.GetCurrentPoint(ViewportBorder);
+        var pos   = point.Position;
+
+        if (point.Properties.IsLeftButtonPressed)
         {
-            _isPanning    = true;
-            _lastPanPoint = e.GetPosition(ViewportBorder);
-            ViewportBorder.Cursor = new Cursor(StandardCursorType.Hand);
+            var tool = ViewModel.Tools.ActiveTool;
+
+            if (tool == ActiveTool.Pan)
+            {
+                // Pan mode
+                _isPanning    = true;
+                _lastPanPoint = pos;
+                ViewportBorder.Cursor = new Cursor(StandardCursorType.Hand);
+            }
+            else
+            {
+                // Editing mode — apply tool on first press
+                _isPainting = true;
+                var tileX = (int)((pos.X / ViewModel.Zoom) - ViewModel.OffsetX);
+                var tileY = (int)((pos.Y / ViewModel.Zoom) - ViewModel.OffsetY);
+                _lastPaintTileX = tileX;
+                _lastPaintTileY = tileY;
+                if (ViewModel.ApplyTool(tileX, tileY))
+                    _needsRender = true;
+                ViewportBorder.Cursor = new Cursor(StandardCursorType.Cross);
+            }
+
+            // Middle mouse or right mouse always pans
+            if (point.Properties.IsMiddleButtonPressed)
+            {
+                _isPanning    = true;
+                _lastPanPoint = pos;
+                ViewportBorder.Cursor = new Cursor(StandardCursorType.Hand);
+            }
         }
     }
 
     private void OnViewportPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (!_isPanning) return;
-        _isPanning = false;
+        _isPanning  = false;
+        _isPainting = false;
         ViewportBorder.Cursor = new Cursor(StandardCursorType.Arrow);
     }
 

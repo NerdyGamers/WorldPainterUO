@@ -7,6 +7,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WorldPainterUO.App.Configuration;
 using WorldPainterUO.Core;
+using WorldPainterUO.Editor;
+using WorldPainterUO.Editor.Tools;
 using WorldPainterUO.FileFormats;
 using WorldPainterUO.Rendering;
 
@@ -27,6 +29,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private bool _showChunkGrid;
     private Timer? _autosaveTimer;
 
+    // ── Undo / Redo ───────────────────────────────────────────────────────────
+    public CommandHistory History { get; } = new();
+
+    // ── Tool state ────────────────────────────────────────────────────────────
+    public ToolViewModel Tools { get; } = new();
+
     public MainWindowViewModel()
     {
         RecentFiles = RecentFiles.Load();
@@ -36,9 +44,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             new LayerItem("Height",  true),
         ];
 
-        // Sync layer visibility changes to the render service
         foreach (var layer in Layers)
             layer.PropertyChanged += OnLayerVisibilityChanged;
+
+        History.StateChanged += () =>
+        {
+            OnPropertyChanged(nameof(CanUndo));
+            OnPropertyChanged(nameof(CanRedo));
+            OnPropertyChanged(nameof(UndoLabel));
+            OnPropertyChanged(nameof(RedoLabel));
+        };
 
         var prefs = AppPreferences.Load();
         ApplyPreferences(prefs);
@@ -50,7 +65,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public string Title => _map is null
         ? "WorldPainterUO"
-        : $"WorldPainterUO — {_map.Dimensions.Width}\u00d7{_map.Dimensions.Height} ({_map.Metadata.Facet})";
+        : $"WorldPainterUO \u2014 {_map.Dimensions.Width}\u00d7{_map.Dimensions.Height} ({_map.Metadata.Facet})";
 
     public WorldMap? Map
     {
@@ -91,13 +106,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public string ZoomPercent => $"{_zoom * 100:F0}%";
 
-    public int TileX { get => _tileX; private set => SetProperty(ref _tileX, value); }
-    public int TileY { get => _tileY; private set => SetProperty(ref _tileY, value); }
+    public int TileX    { get => _tileX;  private set => SetProperty(ref _tileX, value);  }
+    public int TileY    { get => _tileY;  private set => SetProperty(ref _tileY, value);  }
     public ushort TileId { get => _tileId; private set => SetProperty(ref _tileId, value); }
-    public sbyte TileZ { get => _tileZ; private set => SetProperty(ref _tileZ, value); }
+    public sbyte TileZ   { get => _tileZ;  private set => SetProperty(ref _tileZ, value);  }
 
-    public MapRenderService RenderService { get; } = new();
-    public MinimapRenderer MinimapRenderer { get; } = new();
+    public MapRenderService RenderService  { get; } = new();
+    public MinimapRenderer  MinimapRenderer { get; } = new();
 
     public ViewMode ViewMode
     {
@@ -116,7 +131,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
-    // Used by AXAML checkmarks
     public bool IsRadarMode   => _viewMode == ViewMode.Radar;
     public bool IsTerrainMode => _viewMode == ViewMode.Terrain;
     public bool IsHybridMode  => _viewMode == ViewMode.Hybrid;
@@ -124,21 +138,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool ShowTileGrid
     {
         get => _showTileGrid;
-        set
-        {
-            if (SetProperty(ref _showTileGrid, value))
-                RenderService.ShowTileGrid = value;
-        }
+        set { if (SetProperty(ref _showTileGrid, value)) RenderService.ShowTileGrid = value; }
     }
 
     public bool ShowChunkGrid
     {
         get => _showChunkGrid;
-        set
-        {
-            if (SetProperty(ref _showChunkGrid, value))
-                RenderService.ShowChunkGrid = value;
-        }
+        set { if (SetProperty(ref _showChunkGrid, value)) RenderService.ShowChunkGrid = value; }
     }
 
     public ObservableCollection<LayerItem> Layers { get; }
@@ -147,12 +153,76 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ? "No map loaded"
         : $"Tile: ({_tileX}, {_tileY})  ID: 0x{_tileId:X4}  Z: {_tileZ,4}  Zoom: {ZoomPercent}";
 
+    // Undo / Redo UI helpers
+    public bool CanUndo   => History.CanUndo;
+    public bool CanRedo   => History.CanRedo;
+    public string UndoLabel => History.UndoDescription is string d ? $"Undo: {d}" : "Undo";
+    public string RedoLabel => History.RedoDescription is string d ? $"Redo: {d}" : "Redo";
+
     public event Action? RequestNewMap;
     public event Action? RequestOpenMap;
 
+    // ── Tool execution (called from code-behind on pointer events) ─────────────
+
+    /// <summary>
+    /// Applies the currently active tool at the given tile coordinate.
+    /// Returns true if the map was modified and the viewport needs re-render.
+    /// </summary>
+    public bool ApplyTool(int tileX, int tileY)
+    {
+        if (_map is null) return false;
+        if (tileX < 0 || tileY < 0 || tileX >= _map.Dimensions.Width || tileY >= _map.Dimensions.Height)
+            return false;
+
+        var t = Tools;
+
+        ICommand? cmd = t.ActiveTool switch
+        {
+            ActiveTool.PaintBrush when t.ActiveBiome is { } biome =>
+                PaintBrushTool.Execute(
+                    _map, tileX, tileY,
+                    biome.Definition.Tiles.Count > 0 ? biome.Definition.Tiles[0].TileId : (ushort)3,
+                    t.BrushRadius, t.BrushStrength, t.BrushHardness),
+
+            ActiveTool.Fill when t.ActiveBiome is { } biome =>
+                FillTool.Execute(
+                    _map, tileX, tileY,
+                    biome.Definition.Tiles.Count > 0 ? biome.Definition.Tiles[0].TileId : (ushort)3),
+
+            ActiveTool.Raise =>
+                RaiseTool.Execute(_map, tileX, tileY, t.BrushRadius, (sbyte)Math.Clamp((int)(t.BrushStrength * 5), 1, 10)),
+
+            ActiveTool.Lower =>
+                LowerTool.Execute(_map, tileX, tileY, t.BrushRadius, (sbyte)Math.Clamp((int)(t.BrushStrength * 5), 1, 10)),
+
+            ActiveTool.Smooth =>
+                SmoothTool.Execute(_map, tileX, tileY, t.BrushRadius, t.BrushStrength),
+
+            ActiveTool.Flatten =>
+                FlattenTool.Execute(_map, tileX, tileY, t.BrushRadius, t.FlattenZ),
+
+            ActiveTool.Noise =>
+                NoiseTool.Execute(_map, tileX, tileY, t.BrushRadius, (int)(t.BrushStrength * 10)),
+
+            ActiveTool.Replace when t.ActiveBiome is { } biome =>
+                ReplaceTool.Execute(
+                    _map, tileX, tileY,
+                    _map.Terrain[tileX, tileY],
+                    biome.Definition.Tiles.Count > 0 ? biome.Definition.Tiles[0].TileId : (ushort)3),
+
+            _ => null,
+        };
+
+        if (cmd is null) return false;
+
+        History.Execute(cmd, _map);
+        RenderService.InvalidateAll();
+        MinimapRenderer.Invalidate();
+        return true;
+    }
+
     // ── Public Methods ────────────────────────────────────────────────────────
 
-    /// <summary>Apply all preferences in one call (startup + after settings dialog).</summary>
     public void ApplyPreferences(AppPreferences prefs)
     {
         ApplyUoDataPath(prefs.UoDataPath);
@@ -176,12 +246,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             : ThemeVariant.Dark;
     }
 
-    // ── Layers ────────────────────────────────────────────────────────────────
-
     private void OnLayerVisibilityChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(LayerItem.Visible)) return;
-
         foreach (var layer in Layers)
         {
             switch (layer.Name)
@@ -190,7 +257,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 case "Height":  RenderService.HeightVisible  = layer.Visible; break;
             }
         }
-
         RenderService.InvalidateAll();
         MinimapRenderer.Invalidate();
     }
@@ -201,13 +267,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         _autosaveTimer?.Stop();
         _autosaveTimer?.Dispose();
-
         if (intervalSeconds <= 0) return;
-
-        _autosaveTimer = new Timer(intervalSeconds * 1000.0)
-        {
-            AutoReset = true,
-        };
+        _autosaveTimer = new Timer(intervalSeconds * 1000.0) { AutoReset = true };
         _autosaveTimer.Elapsed += (_, _) => TriggerAutosave();
         _autosaveTimer.Start();
     }
@@ -223,6 +284,28 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [RelayCommand] private void NewMap()  => RequestNewMap?.Invoke();
     [RelayCommand] private void OpenMap() => RequestOpenMap?.Invoke();
+
+    [RelayCommand]
+    private void Undo()
+    {
+        if (_map is null) return;
+        if (History.Undo(_map))
+        {
+            RenderService.InvalidateAll();
+            MinimapRenderer.Invalidate();
+        }
+    }
+
+    [RelayCommand]
+    private void Redo()
+    {
+        if (_map is null) return;
+        if (History.Redo(_map))
+        {
+            RenderService.InvalidateAll();
+            MinimapRenderer.Invalidate();
+        }
+    }
 
     [RelayCommand]
     private void ZoomIn()
@@ -241,9 +324,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ResetZoom()
     {
-        Zoom = 1.0;
-        OffsetX = 0;
-        OffsetY = 0;
+        Zoom = 1.0; OffsetX = 0; OffsetY = 0;
         OnPropertyChanged(nameof(StatusText));
     }
 
@@ -252,6 +333,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public void LoadMap(WorldMap map, double viewportWidth = 0, double viewportHeight = 0)
     {
         Map = map;
+        History.Clear();
         RenderService.ClearCache();
         ResetView();
 
@@ -277,19 +359,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public void UpdateMousePosition(double canvasX, double canvasY)
     {
         if (_map is null) return;
-
         var tileX = (int)((canvasX / _zoom) - _offsetX);
         var tileY = (int)((canvasY / _zoom) - _offsetY);
-
-        TileX = tileX;
-        TileY = tileY;
-
+        TileX = tileX; TileY = tileY;
         if (tileX >= 0 && tileY >= 0 && tileX < _map.Dimensions.Width && tileY < _map.Dimensions.Height)
         {
             TileId = _map.Terrain[tileX, tileY];
             TileZ  = _map.Height[tileX, tileY];
         }
-
         OnPropertyChanged(nameof(StatusText));
     }
 
@@ -298,10 +375,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         var oldZoom = _zoom;
         Zoom = deltaY > 0 ? _zoom * 2.0 : _zoom * 0.5;
         var ratio = _zoom / oldZoom;
-
         OffsetX = mouseX / _zoom - (mouseX / oldZoom - _offsetX) * ratio;
         OffsetY = mouseY / _zoom - (mouseY / oldZoom - _offsetY) * ratio;
-
         OnPropertyChanged(nameof(StatusText));
     }
 
@@ -328,15 +403,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 public sealed class LayerItem : ObservableObject
 {
     private bool _visible;
-
-    public LayerItem(string name, bool visible = true)
-    {
-        Name = name;
-        _visible = visible;
-    }
-
+    public LayerItem(string name, bool visible = true) { Name = name; _visible = visible; }
     public string Name { get; }
-
     public bool Visible
     {
         get => _visible;
