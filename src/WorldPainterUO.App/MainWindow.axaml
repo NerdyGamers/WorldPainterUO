@@ -11,30 +11,51 @@
     <DockPanel>
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
-                <MenuItem Header="_New Map" Command="{Binding NewMapCommand}" />
-                <MenuItem Header="_Open..." Command="{Binding OpenMapCommand}" />
+                <MenuItem Header="_New Map" Command="{Binding NewMapCommand}" InputGesture="Ctrl+N" />
+                <MenuItem Header="_Open..." Command="{Binding OpenMapCommand}" InputGesture="Ctrl+O" />
                 <MenuItem Header="_Recent" x:Name="RecentMenu"
                           ItemsSource="{Binding RecentFiles.Entries}">
                     <MenuItem.ItemTemplate>
                         <DataTemplate>
-                            <MenuItem Header="{Binding Path}"
-                                      Click="OnOpenRecentFile" />
+                            <MenuItem Header="{Binding Path}" Click="OnOpenRecentFile" />
                         </DataTemplate>
                     </MenuItem.ItemTemplate>
                 </MenuItem>
                 <Separator />
-                <MenuItem Header="_Settings..." Click="OnOpenSettings" />
+                <MenuItem Header="_Settings..." Click="OnOpenSettings" InputGesture="Ctrl+," />
                 <Separator />
                 <MenuItem Header="E_xit" Click="OnExit" />
             </MenuItem>
+
             <MenuItem Header="_View">
-                <MenuItem Header="Zoom _In" Command="{Binding ZoomInCommand}" InputGesture="Ctrl+OemPlus" />
+                <!-- View Mode -->
+                <MenuItem Header="Render Mode">
+                    <MenuItem Header="_Radar View"
+                              Click="OnSetRadarMode"
+                              Icon="{Binding IsRadarMode, Converter={StaticResource BoolToCheckConverter}}" />
+                    <MenuItem Header="_Terrain View"
+                              Click="OnSetTerrainMode"
+                              Icon="{Binding IsTerrainMode, Converter={StaticResource BoolToCheckConverter}}" />
+                    <MenuItem Header="_Hybrid View"
+                              Click="OnSetHybridMode"
+                              Icon="{Binding IsHybridMode, Converter={StaticResource BoolToCheckConverter}}" />
+                </MenuItem>
+                <Separator />
+                <!-- Grid overlays -->
+                <MenuItem Header="Show _Tile Grid"
+                          Click="OnToggleTileGrid"
+                          InputGesture="Ctrl+G" />
+                <MenuItem Header="Show _Chunk Grid"
+                          Click="OnToggleChunkGrid"
+                          InputGesture="Ctrl+Shift+G" />
+                <Separator />
+                <!-- Zoom -->
+                <MenuItem Header="Zoom _In"  Command="{Binding ZoomInCommand}"  InputGesture="Ctrl+OemPlus" />
                 <MenuItem Header="Zoom _Out" Command="{Binding ZoomOutCommand}" InputGesture="Ctrl+OemMinus" />
                 <MenuItem Header="_Reset Zoom" Command="{Binding ResetZoomCommand}" InputGesture="Ctrl+D0" />
             </MenuItem>
         </Menu>
 
-        <!-- Status bar declared BEFORE the fill child so DockPanel gives the Grid all remaining height -->
         <Border DockPanel.Dock="Bottom"
                 Background="#1e1e30"
                 Padding="8,4"
@@ -45,7 +66,6 @@
                        FontSize="12" />
         </Border>
 
-        <!-- Grid is last = fill child, receives all remaining space -->
         <Grid ColumnDefinitions="*,220">
             <!-- Viewport -->
             <Border Grid.Column="0"
@@ -84,8 +104,7 @@
                             Width="180"
                             Height="180"
                             CornerRadius="4">
-                        <Image x:Name="MinimapImage"
-                               Stretch="Uniform" />
+                        <Image x:Name="MinimapImage" Stretch="Uniform" />
                     </Border>
 
                     <Separator />

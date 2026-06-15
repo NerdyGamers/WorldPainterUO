@@ -1,3 +1,4 @@
+using System.IO;
 using SkiaSharp;
 using WorldPainterUO.Core;
 
@@ -7,6 +8,17 @@ namespace WorldPainterUO.Rendering;
 public sealed class MinimapRenderer
 {
     private SKBitmap? _cached;
+    private readonly RadarColorPalette _palette = new();
+
+    /// <summary>Loads radar colors from the given UO data folder. Safe to call multiple times.</summary>
+    public bool TryLoadRadarColors(string? uoDataPath)
+    {
+        if (string.IsNullOrWhiteSpace(uoDataPath))
+            return false;
+        var loaded = _palette.TryLoad(uoDataPath);
+        Invalidate(); // force re-render with new palette
+        return loaded;
+    }
 
     /// <summary>Gets or renders the minimap bitmap. Cached until <see cref="Invalidate"/>.</summary>
     public SKBitmap GetOrRender(WorldMap map, int maxSize = 200)
@@ -30,7 +42,7 @@ public sealed class MinimapRenderer
 
                     var id = map.Terrain[tileX, tileY];
                     var z = map.Height[tileX, tileY];
-                    var baseColor = RadarColorPalette.GetColor(id);
+                    var baseColor = _palette.GetColor(id);
                     var heightFactor = (z + 100) / 227.0f;
                     heightFactor = Math.Clamp(heightFactor, 0.3f, 1.0f);
 

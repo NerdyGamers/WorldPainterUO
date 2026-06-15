@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using WorldPainterUO.App.Configuration;
 using WorldPainterUO.App.ViewModels;
 
 namespace WorldPainterUO.App.Views;
@@ -9,6 +10,12 @@ public partial class NewMapDialog : Window
     public NewMapDialog()
     {
         InitializeComponent();
+
+        // Seed fields from saved preferences
+        var prefs = AppPreferences.Load();
+        WidthBox.Text  = prefs.DefaultMapWidth.ToString();
+        HeightBox.Text = prefs.DefaultMapHeight.ToString();
+        FacetBox.Text  = prefs.DefaultFacet;
     }
 
     public Task<NewMapViewModel.MapDims?> RunDialogAsync(Window owner)

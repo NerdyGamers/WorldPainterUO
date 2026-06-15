@@ -1,5 +1,8 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Timers;
+using Avalonia;
+using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WorldPainterUO.App.Configuration;
@@ -9,7 +12,7 @@ using WorldPainterUO.Rendering;
 
 namespace WorldPainterUO.App.ViewModels;
 
-public sealed partial class MainWindowViewModel : ObservableObject
+public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
     private WorldMap? _map;
     private double _offsetX;
@@ -20,6 +23,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private ushort _tileId;
     private sbyte _tileZ;
     private ViewMode _viewMode = ViewMode.Radar;
+    private bool _showTileGrid;
+    private bool _showChunkGrid;
+    private Timer? _autosaveTimer;
 
     public MainWindowViewModel()
     {
@@ -27,14 +33,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Layers =
         [
             new LayerItem("Terrain", true),
-            new LayerItem("Height", true),
+            new LayerItem("Height",  true),
         ];
 
-        // Load radar colors from saved UO data path on startup
+        // Sync layer visibility changes to the render service
+        foreach (var layer in Layers)
+            layer.PropertyChanged += OnLayerVisibilityChanged;
+
         var prefs = AppPreferences.Load();
-        RenderService.TryLoadRadarColors(prefs.UoDataPath);
-        MinimapRenderer.TryLoadRadarColors(prefs.UoDataPath);
+        ApplyPreferences(prefs);
     }
+
+    // ── Properties ────────────────────────────────────────────────────────────
 
     public RecentFiles RecentFiles { get; }
 
@@ -81,32 +91,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public string ZoomPercent => $"{_zoom * 100:F0}%";
 
-    public int TileX
-    {
-        get => _tileX;
-        private set => SetProperty(ref _tileX, value);
-    }
+    public int TileX { get => _tileX; private set => SetProperty(ref _tileX, value); }
+    public int TileY { get => _tileY; private set => SetProperty(ref _tileY, value); }
+    public ushort TileId { get => _tileId; private set => SetProperty(ref _tileId, value); }
+    public sbyte TileZ { get => _tileZ; private set => SetProperty(ref _tileZ, value); }
 
-    public int TileY
-    {
-        get => _tileY;
-        private set => SetProperty(ref _tileY, value);
-    }
-
-    public ushort TileId
-    {
-        get => _tileId;
-        private set => SetProperty(ref _tileId, value);
-    }
-
-    public sbyte TileZ
-    {
-        get => _tileZ;
-        private set => SetProperty(ref _tileZ, value);
-    }
-
-    public MapRenderService RenderService { get; private set; } = new();
-    public MinimapRenderer MinimapRenderer { get; private set; } = new();
+    public MapRenderService RenderService { get; } = new();
+    public MinimapRenderer MinimapRenderer { get; } = new();
 
     public ViewMode ViewMode
     {
@@ -117,7 +108,36 @@ public sealed partial class MainWindowViewModel : ObservableObject
             {
                 RenderService.ViewMode = value;
                 RenderService.InvalidateAll();
+                MinimapRenderer.Invalidate();
+                OnPropertyChanged(nameof(IsRadarMode));
+                OnPropertyChanged(nameof(IsTerrainMode));
+                OnPropertyChanged(nameof(IsHybridMode));
             }
+        }
+    }
+
+    // Used by AXAML checkmarks
+    public bool IsRadarMode   => _viewMode == ViewMode.Radar;
+    public bool IsTerrainMode => _viewMode == ViewMode.Terrain;
+    public bool IsHybridMode  => _viewMode == ViewMode.Hybrid;
+
+    public bool ShowTileGrid
+    {
+        get => _showTileGrid;
+        set
+        {
+            if (SetProperty(ref _showTileGrid, value))
+                RenderService.ShowTileGrid = value;
+        }
+    }
+
+    public bool ShowChunkGrid
+    {
+        get => _showChunkGrid;
+        set
+        {
+            if (SetProperty(ref _showChunkGrid, value))
+                RenderService.ShowChunkGrid = value;
         }
     }
 
@@ -130,10 +150,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public event Action? RequestNewMap;
     public event Action? RequestOpenMap;
 
-    /// <summary>
-    /// Called when the user changes the UO data path in preferences.
-    /// Reloads radar colors and re-renders.
-    /// </summary>
+    // ── Public Methods ────────────────────────────────────────────────────────
+
+    /// <summary>Apply all preferences in one call (startup + after settings dialog).</summary>
+    public void ApplyPreferences(AppPreferences prefs)
+    {
+        ApplyUoDataPath(prefs.UoDataPath);
+        ApplyTheme(prefs.Theme);
+        RestartAutosave(prefs.AutosaveIntervalSeconds);
+    }
+
     public void ApplyUoDataPath(string? path)
     {
         RenderService.TryLoadRadarColors(path);
@@ -142,44 +168,61 @@ public sealed partial class MainWindowViewModel : ObservableObject
         MinimapRenderer.Invalidate();
     }
 
-    [RelayCommand]
-    private void NewMap()
+    public static void ApplyTheme(string? theme)
     {
-        RequestNewMap?.Invoke();
+        if (Application.Current is null) return;
+        Application.Current.RequestedThemeVariant = theme == "Light"
+            ? ThemeVariant.Light
+            : ThemeVariant.Dark;
     }
 
-    [RelayCommand]
-    private void OpenMap()
-    {
-        RequestOpenMap?.Invoke();
-    }
+    // ── Layers ────────────────────────────────────────────────────────────────
 
-    public void LoadMap(WorldMap map, double viewportWidth = 0, double viewportHeight = 0)
+    private void OnLayerVisibilityChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        Map = map;
-        RenderService.ClearCache();
-        ResetView();
+        if (e.PropertyName != nameof(LayerItem.Visible)) return;
 
-        // Auto-fit zoom if we know viewport dimensions
-        if (viewportWidth > 0 && viewportHeight > 0)
+        foreach (var layer in Layers)
         {
-            var fitZoom = Math.Min(viewportWidth / map.Dimensions.Width,
-                                   viewportHeight / map.Dimensions.Height);
-            Zoom = Math.Clamp(fitZoom * 0.9, 0.03125, 1.0);
-        }
-        else
-        {
-            Zoom = 1.0;
+            switch (layer.Name)
+            {
+                case "Terrain": RenderService.TerrainVisible = layer.Visible; break;
+                case "Height":  RenderService.HeightVisible  = layer.Visible; break;
+            }
         }
 
-        // Center the map
-        OffsetX = -(map.Dimensions.Width - viewportWidth / _zoom) / 2;
-        OffsetY = -(map.Dimensions.Height - viewportHeight / _zoom) / 2;
-
-        RenderService.Zoom = (float)_zoom;
+        RenderService.InvalidateAll();
         MinimapRenderer.Invalidate();
-        OnPropertyChanged(nameof(StatusText));
     }
+
+    // ── Autosave ──────────────────────────────────────────────────────────────
+
+    private void RestartAutosave(int intervalSeconds)
+    {
+        _autosaveTimer?.Stop();
+        _autosaveTimer?.Dispose();
+
+        if (intervalSeconds <= 0) return;
+
+        _autosaveTimer = new Timer(intervalSeconds * 1000.0)
+        {
+            AutoReset = true,
+        };
+        _autosaveTimer.Elapsed += (_, _) => TriggerAutosave();
+        _autosaveTimer.Start();
+    }
+
+    private void TriggerAutosave()
+    {
+        if (_map is null) return;
+        // TODO V1: save to .uomap project file
+        System.Diagnostics.Debug.WriteLine($"[Autosave] {DateTime.Now:HH:mm:ss}");
+    }
+
+    // ── Commands ──────────────────────────────────────────────────────────────
+
+    [RelayCommand] private void NewMap()  => RequestNewMap?.Invoke();
+    [RelayCommand] private void OpenMap() => RequestOpenMap?.Invoke();
 
     [RelayCommand]
     private void ZoomIn()
@@ -204,25 +247,49 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(StatusText));
     }
 
+    // ── Map interaction ───────────────────────────────────────────────────────
+
+    public void LoadMap(WorldMap map, double viewportWidth = 0, double viewportHeight = 0)
+    {
+        Map = map;
+        RenderService.ClearCache();
+        ResetView();
+
+        if (viewportWidth > 0 && viewportHeight > 0)
+        {
+            var fitZoom = Math.Min(viewportWidth / map.Dimensions.Width,
+                                   viewportHeight / map.Dimensions.Height);
+            Zoom = Math.Clamp(fitZoom * 0.9, 0.03125, 1.0);
+        }
+        else
+        {
+            Zoom = 1.0;
+        }
+
+        OffsetX = -(map.Dimensions.Width  - viewportWidth  / _zoom) / 2;
+        OffsetY = -(map.Dimensions.Height - viewportHeight / _zoom) / 2;
+
+        RenderService.Zoom = (float)_zoom;
+        MinimapRenderer.Invalidate();
+        OnPropertyChanged(nameof(StatusText));
+    }
+
     public void UpdateMousePosition(double canvasX, double canvasY)
     {
-        if (_map is null)
-            return;
+        if (_map is null) return;
 
         var tileX = (int)((canvasX / _zoom) - _offsetX);
         var tileY = (int)((canvasY / _zoom) - _offsetY);
 
-        if (tileX < 0 || tileY < 0 || tileX >= _map.Dimensions.Width || tileY >= _map.Dimensions.Height)
-        {
-            TileX = tileX;
-            TileY = tileY;
-            return;
-        }
-
         TileX = tileX;
         TileY = tileY;
-        TileId = _map.Terrain[tileX, tileY];
-        TileZ = _map.Height[tileX, tileY];
+
+        if (tileX >= 0 && tileY >= 0 && tileX < _map.Dimensions.Width && tileY < _map.Dimensions.Height)
+        {
+            TileId = _map.Terrain[tileX, tileY];
+            TileZ  = _map.Height[tileX, tileY];
+        }
+
         OnPropertyChanged(nameof(StatusText));
     }
 
@@ -246,14 +313,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private void ResetView()
     {
-        OffsetX = 0;
-        OffsetY = 0;
-        Zoom = 1.0;
-        TileX = 0;
-        TileY = 0;
-        TileId = 0;
-        TileZ = 0;
+        OffsetX = 0; OffsetY = 0; Zoom = 1.0;
+        TileX = 0; TileY = 0; TileId = 0; TileZ = 0;
         OnPropertyChanged(nameof(StatusText));
+    }
+
+    public void Dispose()
+    {
+        _autosaveTimer?.Stop();
+        _autosaveTimer?.Dispose();
     }
 }
 

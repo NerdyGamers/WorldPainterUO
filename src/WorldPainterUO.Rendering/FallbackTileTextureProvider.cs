@@ -5,9 +5,18 @@ namespace WorldPainterUO.Rendering;
 /// <summary>
 /// Fallback tile texture provider that generates procedural textures.
 /// Used when art.mul / artLegacyMUL.uop is not loaded.
+/// Requires a <see cref="RadarColorPalette"/> instance to be supplied so it
+/// uses the same loaded palette as the rest of the renderer.
 /// </summary>
 public sealed class FallbackTileTextureProvider : ITileTextureProvider
 {
+    private readonly RadarColorPalette _palette;
+
+    public FallbackTileTextureProvider(RadarColorPalette palette)
+    {
+        _palette = palette;
+    }
+
     public bool HasArtwork => false;
 
     public SKBitmap? GetLandTileTexture(ushort tileId)
@@ -22,7 +31,7 @@ public sealed class FallbackTileTextureProvider : ITileTextureProvider
     public void RenderFallbackTile(SKCanvas canvas, float x, float y, float size,
         ushort tileId, sbyte z)
     {
-        var baseColor = RadarColorPalette.GetColor(tileId);
+        var baseColor = _palette.GetColor(tileId);
         var heightFactor = (z + 100) / 227.0f;
         heightFactor = Math.Clamp(heightFactor, 0.4f, 1.0f);
 
@@ -38,7 +47,6 @@ public sealed class FallbackTileTextureProvider : ITileTextureProvider
 
         canvas.DrawRect(x, y, size, size, paint);
 
-        // Subtle internal pattern for terrain feel
         if (size >= 8)
         {
             var tint = (tileId & 0x3) switch

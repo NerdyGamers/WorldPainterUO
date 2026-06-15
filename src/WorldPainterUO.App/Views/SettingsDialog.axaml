@@ -2,8 +2,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="WorldPainterUO.App.Views.SettingsDialog"
         Title="Settings"
-        Width="520"
-        Height="320"
+        Width="540"
+        Height="400"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
         Background="#2d2d3f"
@@ -33,8 +33,7 @@
                     CornerRadius="4" />
         </StackPanel>
 
-        <!-- Content -->
-        <StackPanel Spacing="16">
+        <StackPanel Spacing="20">
 
             <!-- UO Data Path -->
             <StackPanel Spacing="6">
@@ -63,7 +62,6 @@
                 </Grid>
                 <TextBlock x:Name="PathStatusText"
                            FontSize="11"
-                           Foreground="#f0a050"
                            TextWrapping="Wrap"
                            IsVisible="False" />
             </StackPanel>
@@ -81,6 +79,46 @@
                     <ComboBoxItem Content="Dark" />
                     <ComboBoxItem Content="Light" />
                 </ComboBox>
+            </StackPanel>
+
+            <!-- New Map Defaults -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="New Map Defaults"
+                           FontWeight="SemiBold"
+                           Foreground="#ddd" />
+                <Grid ColumnDefinitions="120,*,16,120,*" RowDefinitions="Auto,Auto">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Default Width:"
+                               Foreground="#aaa" VerticalAlignment="Center" />
+                    <TextBox   Grid.Row="0" Grid.Column="1" x:Name="DefaultWidthBox"
+                               Background="#1e1e30" Foreground="#ccc" BorderBrush="#555" CornerRadius="4" />
+
+                    <TextBlock Grid.Row="0" Grid.Column="3" Text="Default Height:"
+                               Foreground="#aaa" VerticalAlignment="Center" />
+                    <TextBox   Grid.Row="0" Grid.Column="4" x:Name="DefaultHeightBox"
+                               Background="#1e1e30" Foreground="#ccc" BorderBrush="#555" CornerRadius="4" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Default Facet:"
+                               Foreground="#aaa" VerticalAlignment="Center" Margin="0,8,0,0" />
+                    <TextBox   Grid.Row="1" Grid.Column="1" x:Name="DefaultFacetBox"
+                               Background="#1e1e30" Foreground="#ccc" BorderBrush="#555" CornerRadius="4"
+                               Margin="0,8,0,0" />
+                </Grid>
+            </StackPanel>
+
+            <!-- Autosave -->
+            <StackPanel Spacing="6" Orientation="Horizontal">
+                <TextBlock Text="Autosave every"
+                           Foreground="#aaa"
+                           VerticalAlignment="Center" />
+                <TextBox x:Name="AutosaveBox"
+                         Width="60"
+                         Background="#1e1e30"
+                         Foreground="#ccc"
+                         BorderBrush="#555"
+                         CornerRadius="4" />
+                <TextBlock Text="seconds (0 = disabled)"
+                           Foreground="#888"
+                           VerticalAlignment="Center" />
             </StackPanel>
 
         </StackPanel>

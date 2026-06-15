@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -31,7 +30,7 @@ public partial class MainWindow : Window
         ViewModel = new MainWindowViewModel();
         DataContext = ViewModel;
 
-        ViewModel.RequestNewMap += OnRequestNewMap;
+        ViewModel.RequestNewMap  += OnRequestNewMap;
         ViewModel.RequestOpenMap += OnRequestOpenMap;
 
         ViewModel.PropertyChanged += (_, e) =>
@@ -39,7 +38,10 @@ public partial class MainWindow : Window
             if (e.PropertyName is nameof(MainWindowViewModel.Map)
                 or nameof(MainWindowViewModel.OffsetX)
                 or nameof(MainWindowViewModel.OffsetY)
-                or nameof(MainWindowViewModel.Zoom))
+                or nameof(MainWindowViewModel.Zoom)
+                or nameof(MainWindowViewModel.ShowTileGrid)
+                or nameof(MainWindowViewModel.ShowChunkGrid)
+                or nameof(MainWindowViewModel.ViewMode))
             {
                 _needsRender = true;
             }
@@ -49,7 +51,6 @@ public partial class MainWindow : Window
         {
             _needsRender = true;
 
-            // First-run: prompt for UO data path if not yet configured
             var prefs = AppPreferences.Load();
             if (string.IsNullOrWhiteSpace(prefs.UoDataPath))
             {
@@ -81,34 +82,54 @@ public partial class MainWindow : Window
 
     public MainWindowViewModel ViewModel { get; }
 
+    // ── Menu handlers ─────────────────────────────────────────────────────────
+
     private async void OnOpenSettings(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        await OpenSettingsAsync();
-    }
+        => await OpenSettingsAsync();
 
     private async System.Threading.Tasks.Task OpenSettingsAsync()
     {
         var result = await SettingsDialog.ShowDialog(this);
         if (result is not null)
         {
-            ViewModel.ApplyUoDataPath(result.UoDataPath);
+            ViewModel.ApplyPreferences(result);
             _needsRender = true;
         }
     }
 
-    private void OnExit(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    private void OnExit(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => Close();
+
+    private void OnSetRadarMode(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ViewModel.ViewMode = ViewMode.Radar;
+
+    private void OnSetTerrainMode(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ViewModel.ViewMode = ViewMode.Terrain;
+
+    private void OnSetHybridMode(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ViewModel.ViewMode = ViewMode.Hybrid;
+
+    private void OnToggleTileGrid(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        Close();
+        ViewModel.ShowTileGrid = !ViewModel.ShowTileGrid;
+        _needsRender = true;
     }
+
+    private void OnToggleChunkGrid(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        ViewModel.ShowChunkGrid = !ViewModel.ShowChunkGrid;
+        _needsRender = true;
+    }
+
+    // ── Map open/new ──────────────────────────────────────────────────────────
 
     private async void OnRequestNewMap()
     {
         var dialog = new NewMapDialog();
         var dims = await dialog.RunDialogAsync(this);
-        if (dims is null)
-            return;
+        if (dims is null) return;
 
-        ViewModel.LoadMap(WorldMap.Create(dims.Width, dims.Height, dims.Facet, SourceFileType.Mul),
+        ViewModel.LoadMap(
+            WorldMap.Create(dims.Width, dims.Height, dims.Facet, SourceFileType.Mul),
             ViewportBorder.Bounds.Width, ViewportBorder.Bounds.Height);
     }
 
@@ -125,32 +146,26 @@ public partial class MainWindow : Window
             ],
         });
 
-        if (files.Count == 0)
-            return;
+        if (files.Count == 0) return;
 
         try
         {
             var filePath = files[0].Path.LocalPath;
-            var dims = UltimaMapReader.DetectDimensions(filePath);
-            var reader = new UltimaMapReader();
-            var map = reader.Read(filePath, dims);
+            var dims     = UltimaMapReader.DetectDimensions(filePath);
+            var reader   = new UltimaMapReader();
+            var map      = reader.Read(filePath, dims);
             ViewModel.RecentFiles.Add(filePath);
-            ViewModel.LoadMap(map,
-                ViewportBorder.Bounds.Width, ViewportBorder.Bounds.Height);
+            ViewModel.LoadMap(map, ViewportBorder.Bounds.Width, ViewportBorder.Bounds.Height);
         }
         catch (Exception ex)
         {
-            await MessageBox.ShowDialog(
-                this,
-                $"Failed to open map:\n{ex.Message}",
-                "Open Error");
+            await MessageBox.ShowDialog(this, $"Failed to open map:\n{ex.Message}", "Open Error");
         }
     }
 
     private async void OnOpenRecentFile(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        if (sender is not MenuItem { DataContext: RecentFileEntry entry })
-            return;
+        if (sender is not MenuItem { DataContext: RecentFileEntry entry }) return;
 
         if (!File.Exists(entry.Path))
         {
@@ -161,12 +176,11 @@ public partial class MainWindow : Window
 
         try
         {
-            var dims = UltimaMapReader.DetectDimensions(entry.Path);
+            var dims   = UltimaMapReader.DetectDimensions(entry.Path);
             var reader = new UltimaMapReader();
-            var map = reader.Read(entry.Path, dims);
+            var map    = reader.Read(entry.Path, dims);
             ViewModel.RecentFiles.Add(entry.Path);
-            ViewModel.LoadMap(map,
-                ViewportBorder.Bounds.Width, ViewportBorder.Bounds.Height);
+            ViewModel.LoadMap(map, ViewportBorder.Bounds.Width, ViewportBorder.Bounds.Height);
         }
         catch (Exception ex)
         {
@@ -174,27 +188,26 @@ public partial class MainWindow : Window
         }
     }
 
+    // ── Render ────────────────────────────────────────────────────────────────
+
     private void RenderViewport()
     {
         var border = ViewportBorder;
         var w = (int)Math.Max(border.Bounds.Width, 1);
         var h = (int)Math.Max(border.Bounds.Height, 1);
 
-        // Guard BEFORE clearing the flag so small-bounds ticks retry on the next frame
-        if (w < 2 || h < 2)
-            return;
+        if (w < 2 || h < 2) return;
 
         _needsRender = false;
 
-        if (ViewModel.Map is null)
-            return;
+        if (ViewModel.Map is null) return;
 
         try
         {
             var renderService = ViewModel.RenderService;
             renderService.OffsetX = (float)ViewModel.OffsetX;
             renderService.OffsetY = (float)ViewModel.OffsetY;
-            renderService.Zoom = (float)ViewModel.Zoom;
+            renderService.Zoom    = (float)ViewModel.Zoom;
 
             renderService.SyncDirtyChunks(ViewModel.Map);
 
@@ -204,8 +217,8 @@ public partial class MainWindow : Window
             renderService.Render(canvas, ViewModel.Map, w, h);
 
             using var image = SKImage.FromBitmap(bitmap);
-            using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-            using var ms = new MemoryStream(data.ToArray());
+            using var data  = image.Encode(SKEncodedImageFormat.Png, 100);
+            using var ms    = new MemoryStream(data.ToArray());
 
             _prevViewport?.Dispose();
             _prevViewport = new Bitmap(ms);
@@ -219,15 +232,14 @@ public partial class MainWindow : Window
 
     private void UpdateMinimap()
     {
-        if (ViewModel.Map is null)
-            return;
+        if (ViewModel.Map is null) return;
 
         try
         {
             var bmp = ViewModel.MinimapRenderer.GetOrRender(ViewModel.Map, 180);
             using var image = SKImage.FromBitmap(bmp);
-            using var data = image.Encode(SKEncodedImageFormat.Png, 80);
-            using var ms = new MemoryStream(data.ToArray());
+            using var data  = image.Encode(SKEncodedImageFormat.Png, 80);
+            using var ms    = new MemoryStream(data.ToArray());
 
             _prevMinimap?.Dispose();
             _prevMinimap = new Bitmap(ms);
@@ -239,10 +251,11 @@ public partial class MainWindow : Window
         }
     }
 
+    // ── Input ─────────────────────────────────────────────────────────────────
+
     private void OnViewportPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (ViewModel.Map is null)
-            return;
+        if (ViewModel.Map is null) return;
 
         var pos = e.GetPosition(ViewportBorder);
 
@@ -252,6 +265,7 @@ public partial class MainWindow : Window
             var dy = pos.Y - _lastPanPoint.Y;
             ViewModel.Pan(dx, dy);
             _lastPanPoint = pos;
+            _needsRender  = true;
             return;
         }
 
@@ -260,21 +274,18 @@ public partial class MainWindow : Window
 
     private void OnViewportPointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
-        if (ViewModel.Map is null)
-            return;
-
+        if (ViewModel.Map is null) return;
         var pos = e.GetPosition(ViewportBorder);
         ViewModel.HandleScroll(e.Delta.X, e.Delta.Y, pos.X, pos.Y);
+        _needsRender = true;
     }
 
     private void OnViewportPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (ViewModel.Map is null)
-            return;
-
+        if (ViewModel.Map is null) return;
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
-            _isPanning = true;
+            _isPanning    = true;
             _lastPanPoint = e.GetPosition(ViewportBorder);
             ViewportBorder.Cursor = new Cursor(StandardCursorType.Hand);
         }
@@ -282,15 +293,11 @@ public partial class MainWindow : Window
 
     private void OnViewportPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (_isPanning)
-        {
-            _isPanning = false;
-            ViewportBorder.Cursor = new Cursor(StandardCursorType.Arrow);
-        }
+        if (!_isPanning) return;
+        _isPanning = false;
+        ViewportBorder.Cursor = new Cursor(StandardCursorType.Arrow);
     }
 
     private void OnViewportSizeChanged(object? sender, SizeChangedEventArgs e)
-    {
-        _needsRender = true;
-    }
+        => _needsRender = true;
 }

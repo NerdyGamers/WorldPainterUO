@@ -1,224 +1,218 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
 using SkiaSharp;
 using WorldPainterUO.Core;
 
 namespace WorldPainterUO.Rendering;
 
-/// <summary>
-/// Main rendering orchestrator. Manages view mode, zoom/pan, chunk-cached
-/// tile rendering, grid/region overlays, and dirty-chunk invalidation.
-/// </summary>
+/// <summary>GPU-accelerated map renderer using SkiaSharp.</summary>
 public sealed class MapRenderService
 {
-    private readonly FallbackTileTextureProvider _tileProvider = new();
-    private readonly RenderCache _cache = new();
-    private readonly RadarColorPalette _radar = new();
+    private readonly RadarColorPalette _palette = new();
+    private FallbackTileTextureProvider _fallback;
+    private readonly Dictionary<(int cx, int cy), SKBitmap> _chunkCache = new();
+    private readonly HashSet<(int cx, int cy)> _dirtyChunks = new();
 
-    public ViewMode ViewMode { get; set; } = ViewMode.Radar;
+    private const int ChunkSize = 32;
 
-    /// <summary>Zoom in pixels per tile (clamped 0.1–8).</summary>
-    public float Zoom { get; set; } = 1.0f;
+    public MapRenderService()
+    {
+        _fallback = new FallbackTileTextureProvider(_palette);
+    }
 
-    /// <summary>Pan offset in tile units.</summary>
+    public float Zoom { get; set; } = 1f;
     public float OffsetX { get; set; }
-
-    /// <summary>Pan offset in tile units.</summary>
     public float OffsetY { get; set; }
-
+    public ViewMode ViewMode { get; set; } = ViewMode.Radar;
     public bool ShowTileGrid { get; set; }
     public bool ShowChunkGrid { get; set; }
 
-    /// <summary>
-    /// Attempts to load radarcol.mul from the given UO data directory.
-    /// Safe to call at any time; invalidates all cached chunks on success.
-    /// </summary>
+    /// <summary>Whether the Terrain layer is visible (controlled by layer panel).</summary>
+    public bool TerrainVisible { get; set; } = true;
+
+    /// <summary>Whether the Height shading overlay is visible (controlled by layer panel).</summary>
+    public bool HeightVisible { get; set; } = true;
+
+    /// <summary>Loads radar colors from the given UO data folder.</summary>
     public bool TryLoadRadarColors(string? uoDataPath)
     {
         if (string.IsNullOrWhiteSpace(uoDataPath))
             return false;
-
-        var loaded = _radar.TryLoad(uoDataPath);
-        if (loaded)
-            _cache.InvalidateAll();
-
+        var loaded = _palette.TryLoad(uoDataPath);
+        if (loaded) InvalidateAll();
         return loaded;
     }
 
-    /// <summary>Consumes dirty flags from the map and marks chunks for re-render.</summary>
-    public void SyncDirtyChunks(WorldMap map) => _cache.SyncDirtyChunks(map);
-
-    /// <summary>Marks a specific chunk for re-render.</summary>
-    public void InvalidateChunk(int cx, int cy) => _cache.InvalidateChunk(cx, cy);
-
-    /// <summary>Marks all chunks for re-render.</summary>
-    public void InvalidateAll() => _cache.InvalidateAll();
-
-    /// <summary>Clears all cached chunk bitmaps.</summary>
-    public void ClearCache() => _cache.Clear();
-
-    /// <summary>Renders the current view of the map to the canvas.</summary>
-    public void Render(SKCanvas canvas, WorldMap map, int width, int height)
+    public void SyncDirtyChunks(WorldMap map)
     {
-        if (map is null)
-        {
-            canvas.Clear(new SKColor(0x1a, 0x1a, 0x2e));
-            return;
-        }
-
-        var dims = map.Dimensions;
-        var zoom = Math.Clamp(Zoom, 0.1f, 8f);
-
-        canvas.Clear(new SKColor(0x1a, 0x1a, 0x2e));
-
-        var chunkSize = MapChunk<ushort>.Size;
-
-        // When chunks are smaller than 2px on screen, render directly tile-by-tile
-        // to avoid creating millions of chunk bitmaps (OOM risk).
-        if (chunkSize * zoom < 4f)
-        {
-            RenderDirect(canvas, map, dims, zoom, width, height);
-            return;
-        }
-
-        // Compute visible chunk range
-        var startCX = Math.Max(0, (int)Math.Floor(-OffsetX / chunkSize));
-        var startCY = Math.Max(0, (int)Math.Floor(-OffsetY / chunkSize));
-        var endCX = Math.Min(dims.ChunksX,
-            (int)Math.Ceiling((width / zoom - OffsetX) / chunkSize) + 1);
-        var endCY = Math.Min(dims.ChunksY,
-            (int)Math.Ceiling((height / zoom - OffsetY) / chunkSize) + 1);
-
-        // Render each visible chunk
-        for (var cy = startCY; cy < endCY; cy++)
-        {
-            for (var cx = startCX; cx < endCX; cx++)
-            {
-                var chunkBmp = _cache.GetOrRender(cx, cy, () =>
-                    RenderChunk(map, cx, cy));
-
-                // Position the cached chunk bitmap
-                var sx = (cx * chunkSize + OffsetX) * zoom;
-                var sy = (cy * chunkSize + OffsetY) * zoom;
-                var sw = chunkSize * zoom;
-                var sh = chunkSize * zoom;
-
-                canvas.DrawBitmap(chunkBmp,
-                    new SKRect(0, 0, chunkBmp.Width, chunkBmp.Height),
-                    new SKRect(sx, sy, sx + sw, sy + sh));
-            }
-        }
-
-        // Overlays
-        OverlayRenderer.DrawGrid(canvas, dims,
-            OffsetX, OffsetY, zoom,
-            width, height,
-            ShowTileGrid, ShowChunkGrid);
+        foreach (var key in map.ConsumeAndClearDirtyChunks())
+            _dirtyChunks.Add(key);
     }
 
-    /// <summary>
-    /// Direct tile-by-tile rendering for very zoomed-out views.
-    /// </summary>
-    private void RenderDirect(SKCanvas canvas, WorldMap map, MapDimensions dims,
-        float zoom, int width, int height)
+    public void InvalidateAll()
     {
-        using var bmp = new SKBitmap(width, height);
+        foreach (var bmp in _chunkCache.Values)
+            bmp.Dispose();
+        _chunkCache.Clear();
+        _dirtyChunks.Clear();
+    }
 
-        for (var py = 0; py < height; py++)
+    public void ClearCache() => InvalidateAll();
+
+    public void Render(SKCanvas canvas, WorldMap map, int viewW, int viewH)
+    {
+        canvas.Clear(new SKColor(20, 20, 30));
+
+        var dims = map.Dimensions;
+        var tileSize = Zoom;
+
+        // Visible tile range
+        var startX = Math.Max(0, (int)(-OffsetX));
+        var startY = Math.Max(0, (int)(-OffsetY));
+        var endX = Math.Min(dims.Width,  startX + (int)(viewW / tileSize) + 2);
+        var endY = Math.Min(dims.Height, startY + (int)(viewH / tileSize) + 2);
+
+        // Render by chunk
+        var startCX = startX / ChunkSize;
+        var startCY = startY / ChunkSize;
+        var endCX = (endX + ChunkSize - 1) / ChunkSize;
+        var endCY = (endY + ChunkSize - 1) / ChunkSize;
+
+        for (var cy = startCY; cy < endCY; cy++)
+        for (var cx = startCX; cx < endCX; cx++)
         {
-            var tileY = (int)((py / zoom) - OffsetY);
-            if (tileY < 0 || tileY >= dims.Height)
-                continue;
-
-            for (var px = 0; px < width; px++)
+            var key = (cx, cy);
+            if (_dirtyChunks.Remove(key) && _chunkCache.TryGetValue(key, out var old))
             {
-                var tileX = (int)((px / zoom) - OffsetX);
-                if (tileX < 0 || tileX >= dims.Width)
-                    continue;
-
-                var id = map.Terrain[tileX, tileY];
-                var z = map.Height[tileX, tileY];
-                var color = _radar.GetColor(id);
-                var heightFactor = Math.Clamp((z + 100) / 227.0f, 0.3f, 1.0f);
-
-                bmp.SetPixel(px, py, new SKColor(
-                    (byte)(color.Red * heightFactor),
-                    (byte)(color.Green * heightFactor),
-                    (byte)(color.Blue * heightFactor)));
+                old.Dispose();
+                _chunkCache.Remove(key);
             }
+
+            if (!_chunkCache.TryGetValue(key, out var chunkBmp))
+            {
+                chunkBmp = RenderChunk(map, cx, cy);
+                _chunkCache[key] = chunkBmp;
+            }
+
+            var screenX = (cx * ChunkSize + OffsetX) * tileSize;
+            var screenY = (cy * ChunkSize + OffsetY) * tileSize;
+            var chunkPx = ChunkSize * tileSize;
+
+            using var paint = new SKPaint { FilterQuality = SKFilterQuality.None };
+            canvas.DrawBitmap(chunkBmp,
+                new SKRect(0, 0, chunkBmp.Width, chunkBmp.Height),
+                new SKRect(screenX, screenY, screenX + chunkPx, screenY + chunkPx),
+                paint);
         }
 
-        canvas.DrawBitmap(bmp, 0, 0);
+        if (ShowTileGrid && Zoom >= 4f)
+            DrawTileGrid(canvas, dims, viewW, viewH);
+
+        if (ShowChunkGrid)
+            DrawChunkGrid(canvas, dims, viewW, viewH);
     }
 
     private SKBitmap RenderChunk(WorldMap map, int cx, int cy)
     {
-        var size = MapChunk<ushort>.Size;
-        var bmp = new SKBitmap(size * 4, size * 4);
-        var tilePx = 4;
+        var dims = map.Dimensions;
+        var bmp = new SKBitmap(ChunkSize, ChunkSize);
 
-        using var chunkCanvas = new SKCanvas(bmp);
-        var terrainChunk = map.Terrain.GetChunk(cx, cy);
-        var heightChunk = map.Height.GetChunk(cx, cy);
+        using var canvas = new SKCanvas(bmp);
+        canvas.Clear(SKColors.Black);
 
-        for (var ly = 0; ly < size; ly++)
+        for (var ty = 0; ty < ChunkSize; ty++)
+        for (var tx = 0; tx < ChunkSize; tx++)
         {
-            for (var lx = 0; lx < size; lx++)
+            var tileX = cx * ChunkSize + tx;
+            var tileY = cy * ChunkSize + ty;
+
+            if (tileX >= dims.Width || tileY >= dims.Height)
+                continue;
+
+            var id = map.Terrain[tileX, tileY];
+            var z  = map.Height[tileX, tileY];
+
+            SKColor color;
+
+            if (!TerrainVisible)
             {
-                var id = terrainChunk[lx, ly];
-                var z = heightChunk[lx, ly];
-                var px = lx * tilePx;
-                var py = ly * tilePx;
+                color = new SKColor(40, 40, 40);
+            }
+            else
+            {
+                color = _palette.GetColor(id);
 
-                switch (ViewMode)
+                if (HeightVisible)
                 {
-                    case ViewMode.Terrain:
-                        if (_tileProvider.HasArtwork)
-                        {
-                            var tex = _tileProvider.GetLandTileTexture(id);
-                            if (tex is not null)
-                                chunkCanvas.DrawBitmap(tex, px, py);
-                            else
-                                _tileProvider.RenderFallbackTile(chunkCanvas, px, py, tilePx, id, z);
-                        }
-                        else
-                        {
-                            _tileProvider.RenderFallbackTile(chunkCanvas, px, py, tilePx, id, z);
-                        }
-                        break;
-
-                    case ViewMode.Hybrid:
-                    {
-                        _tileProvider.RenderFallbackTile(chunkCanvas, px, py, tilePx, id, z);
-                        var radar = _radar.GetColor(id);
-                        using var tint = new SKPaint
-                        {
-                            Color = new SKColor(radar.Red, radar.Green, radar.Blue, 60),
-                            Style = SKPaintStyle.Fill,
-                        };
-                        chunkCanvas.DrawRect(px, py, tilePx, tilePx, tint);
-                        break;
-                    }
-
-                    default: // Radar
-                    {
-                        var color = _radar.GetColor(id);
-                        var heightFactor = (z + 100) / 227.0f;
-                        heightFactor = Math.Clamp(heightFactor, 0.3f, 1.0f);
-                        using var paint = new SKPaint
-                        {
-                            Color = new SKColor(
-                                (byte)(color.Red * heightFactor),
-                                (byte)(color.Green * heightFactor),
-                                (byte)(color.Blue * heightFactor)),
-                            Style = SKPaintStyle.Fill,
-                            IsAntialias = false,
-                        };
-                        chunkCanvas.DrawRect(px, py, tilePx, tilePx, paint);
-                        break;
-                    }
+                    var heightFactor = (z + 100) / 227.0f;
+                    heightFactor = Math.Clamp(heightFactor, 0.3f, 1.0f);
+                    color = new SKColor(
+                        (byte)(color.Red   * heightFactor),
+                        (byte)(color.Green * heightFactor),
+                        (byte)(color.Blue  * heightFactor));
                 }
             }
+
+            bmp.SetPixel(tx, ty, color);
         }
 
         return bmp;
+    }
+
+    private void DrawTileGrid(SKCanvas canvas, MapDimensions dims, int viewW, int viewH)
+    {
+        using var paint = new SKPaint
+        {
+            Color = new SKColor(255, 255, 255, 25),
+            StrokeWidth = 0.5f,
+            Style = SKPaintStyle.Stroke,
+            IsAntialias = false,
+        };
+
+        var ts = Zoom;
+        var startX = Math.Max(0, (int)(-OffsetX));
+        var startY = Math.Max(0, (int)(-OffsetY));
+        var endX = Math.Min(dims.Width,  startX + (int)(viewW / ts) + 2);
+        var endY = Math.Min(dims.Height, startY + (int)(viewH / ts) + 2);
+
+        for (var x = startX; x <= endX; x++)
+        {
+            var sx = (x + OffsetX) * ts;
+            canvas.DrawLine(sx, 0, sx, viewH, paint);
+        }
+        for (var y = startY; y <= endY; y++)
+        {
+            var sy = (y + OffsetY) * ts;
+            canvas.DrawLine(0, sy, viewW, sy, paint);
+        }
+    }
+
+    private void DrawChunkGrid(SKCanvas canvas, MapDimensions dims, int viewW, int viewH)
+    {
+        using var paint = new SKPaint
+        {
+            Color = new SKColor(255, 200, 50, 40),
+            StrokeWidth = 1f,
+            Style = SKPaintStyle.Stroke,
+            IsAntialias = false,
+        };
+
+        var ts = Zoom;
+        var startX = Math.Max(0, (int)(-OffsetX) / ChunkSize * ChunkSize);
+        var startY = Math.Max(0, (int)(-OffsetY) / ChunkSize * ChunkSize);
+        var endX = Math.Min(dims.Width,  startX + (int)(viewW / ts) + ChunkSize + 1);
+        var endY = Math.Min(dims.Height, startY + (int)(viewH / ts) + ChunkSize + 1);
+
+        for (var x = startX; x <= endX; x += ChunkSize)
+        {
+            var sx = (x + OffsetX) * ts;
+            canvas.DrawLine(sx, 0, sx, viewH, paint);
+        }
+        for (var y = startY; y <= endY; y += ChunkSize)
+        {
+            var sy = (y + OffsetY) * ts;
+            canvas.DrawLine(0, sy, viewW, sy, paint);
+        }
     }
 }
