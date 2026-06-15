@@ -12,20 +12,26 @@ namespace WorldPainterUO.FileFormats;
 /// </summary>
 public sealed class UltimaMapReader
 {
+    // Compute file size as: (width / 8) * (height / 8) * 196L
+    // This avoids integer overflow and mid-expression truncation that occurred
+    // when the expression was written as width * height / 64 * 196L.
+    private static long MapFileSize(int width, int height)
+        => (long)(width / 8) * (height / 8) * 196L;
+
     // Known UO map dimensions keyed by file size (bytes).
     // Used by DetectDimensions to identify which facet a file belongs to.
     private static readonly Dictionary<long, (int Width, int Height, string Facet)> KnownSizes = new()
     {
-        // map0/map1 Felucca/Trammel: 6144×4096
-        { 6144 * 4096 / 64 * 196L, (6144, 4096, "Felucca") },
-        // map2 Ilshenar: 2304×1600
-        { 2304 * 1600 / 64 * 196L, (2304, 1600, "Ilshenar") },
-        // map3 Malas: 2560×2048
-        { 2560 * 2048 / 64 * 196L, (2560, 2048, "Malas") },
-        // map4 Tokuno: 1448×1448
-        { 1448 * 1448 / 64 * 196L, (1448, 1448, "Tokuno") },
-        // map5 TerMur: 1280×4096
-        { 1280 * 4096 / 64 * 196L, (1280, 4096, "TerMur") },
+        // map0/map1 Felucca/Trammel: 6144×4096  → 768 × 512 blocks
+        { MapFileSize(6144, 4096), (6144, 4096, "Felucca") },
+        // map2 Ilshenar: 2304×1600              → 288 × 200 blocks
+        { MapFileSize(2304, 1600), (2304, 1600, "Ilshenar") },
+        // map3 Malas: 2560×2048                 → 320 × 256 blocks
+        { MapFileSize(2560, 2048), (2560, 2048, "Malas") },
+        // map4 Tokuno: 1448×1448  — snapped to nearest block boundary (181×181 blocks)
+        { MapFileSize(1448, 1448), (1448, 1448, "Tokuno") },
+        // map5 TerMur: 1280×4096                → 160 × 512 blocks
+        { MapFileSize(1280, 4096), (1280, 4096, "TerMur") },
     };
 
     /// <summary>
