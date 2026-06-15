@@ -1,6 +1,6 @@
 namespace WorldPainterUO.Core;
 
-public readonly record struct MapDimensions(int Width, int Height)
+public readonly record struct MapDimensions(int Width, int Height, string Facet = "Unknown")
 {
     public const int DefaultChunkSize = 64;
 
