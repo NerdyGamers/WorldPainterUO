@@ -26,13 +26,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private ViewMode _viewMode = ViewMode.Radar;
     private bool _showTileGrid;
     private bool _showChunkGrid;
-    // Fully qualify to avoid ambiguity with System.Threading.Timer
     private System.Timers.Timer? _autosaveTimer;
 
-    // ── Undo / Redo ─────────────────────────────────────────────────────────────────
     public CommandHistory History { get; } = new();
-
-    // ── Tool state ────────────────────────────────────────────────────────────────
     public ToolViewModel Tools { get; } = new();
 
     public MainWindowViewModel()
@@ -58,8 +54,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         var prefs = AppPreferences.Load();
         ApplyPreferences(prefs);
     }
-
-    // ── Properties ────────────────────────────────────────────────────────────────
 
     public RecentFiles RecentFiles { get; }
 
@@ -161,7 +155,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public event Action? RequestNewMap;
     public event Action? RequestOpenMap;
 
-    // ── Tool execution ───────────────────────────────────────────────────────────
+    // ── Tool execution ────────────────────────────────────────────────────────
 
     public bool ApplyTool(int tileX, int tileY)
     {
@@ -170,42 +164,57 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return false;
 
         var t = Tools;
+        var tileId = t.ActiveBiome is { } b && b.Definition.Tiles.Count > 0
+            ? b.Definition.Tiles[0].TileId
+            : (ushort)3;
+
+        // amount must be sbyte before passing to raise/lower tools
+        var amount = (sbyte)Math.Clamp((int)(t.BrushStrength * 5), 1, 10);
 
         ICommand? cmd = t.ActiveTool switch
         {
-            ActiveTool.PaintBrush when t.ActiveBiome is { } biome =>
+            // PaintBrushTool: (map, cx, cy, tileId, radius, opacity, hardness, seed, selection?)
+            ActiveTool.PaintBrush when t.ActiveBiome is not null =>
                 PaintBrushTool.Execute(
                     _map, tileX, tileY,
-                    biome.Definition.Tiles.Count > 0 ? biome.Definition.Tiles[0].TileId : (ushort)3,
-                    t.BrushRadius, t.BrushStrength, t.BrushHardness),
+                    tileId,
+                    t.BrushRadius,
+                    t.BrushStrength,
+                    t.BrushHardness,
+                    seed: 0),
 
-            ActiveTool.Fill when t.ActiveBiome is { } biome =>
-                FillTool.Execute(
-                    _map, tileX, tileY,
-                    biome.Definition.Tiles.Count > 0 ? biome.Definition.Tiles[0].TileId : (ushort)3),
+            // FillTool: (map, cx, cy, tileId)
+            ActiveTool.Fill when t.ActiveBiome is not null =>
+                FillTool.Execute(_map, tileX, tileY, tileId),
 
+            // RaiseTool: (map, cx, cy, radius, amount, selection?)
             ActiveTool.Raise =>
-                RaiseTool.Execute(_map, tileX, tileY, t.BrushRadius,
-                    (sbyte)Math.Clamp((int)(t.BrushStrength * 5), 1, 10)),
+                RaiseTool.Execute(_map, tileX, tileY, t.BrushRadius, amount),
 
+            // LowerTool: same signature as RaiseTool, negate amount
             ActiveTool.Lower =>
                 LowerTool.Execute(_map, tileX, tileY, t.BrushRadius,
-                    (sbyte)Math.Clamp((int)(t.BrushStrength * 5), 1, 10)),
+                    (sbyte)Math.Clamp(-amount, -128, -1)),
 
+            // SmoothTool: (map, cx, cy, radius, selection?)  — no strength param
             ActiveTool.Smooth =>
-                SmoothTool.Execute(_map, tileX, tileY, t.BrushRadius, t.BrushStrength),
+                SmoothTool.Execute(_map, tileX, tileY, t.BrushRadius),
 
+            // FlattenTool: (map, cx, cy, radius, targetZ)
             ActiveTool.Flatten =>
                 FlattenTool.Execute(_map, tileX, tileY, t.BrushRadius, t.FlattenZ),
 
+            // NoiseTool: (map, cx, cy, radius, magnitude)
             ActiveTool.Noise =>
                 NoiseTool.Execute(_map, tileX, tileY, t.BrushRadius, (int)(t.BrushStrength * 10)),
 
-            ActiveTool.Replace when t.ActiveBiome is { } biome =>
+            // ReplaceTool: (map, findTileId, replaceTileId, bounds?, selection?)
+            // Replace the tile currently under the cursor with the active biome tile.
+            ActiveTool.Replace when t.ActiveBiome is not null =>
                 ReplaceTool.Execute(
-                    _map, tileX, tileY,
-                    _map.Terrain[tileX, tileY],
-                    biome.Definition.Tiles.Count > 0 ? biome.Definition.Tiles[0].TileId : (ushort)3),
+                    _map,
+                    _map.Terrain[tileX, tileY],   // findTileId
+                    tileId),                        // replaceTileId
 
             _ => null,
         };
@@ -218,7 +227,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         return true;
     }
 
-    // ── Public Methods ───────────────────────────────────────────────────────────
+    // ── Public Methods ────────────────────────────────────────────────────────
 
     public void ApplyPreferences(AppPreferences prefs)
     {
@@ -258,7 +267,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         MinimapRenderer.Invalidate();
     }
 
-    // ── Autosave ────────────────────────────────────────────────────────────────
+    // ── Autosave ──────────────────────────────────────────────────────────────
 
     private void RestartAutosave(int intervalSeconds)
     {
@@ -276,7 +285,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         System.Diagnostics.Debug.WriteLine($"[Autosave] {DateTime.Now:HH:mm:ss}");
     }
 
-    // ── Commands ────────────────────────────────────────────────────────────────
+    // ── Commands ──────────────────────────────────────────────────────────────
 
     [RelayCommand] private void NewMap()  => RequestNewMap?.Invoke();
     [RelayCommand] private void OpenMap() => RequestOpenMap?.Invoke();
@@ -285,34 +294,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private void Undo()
     {
         if (_map is null) return;
-        if (History.Undo(_map))
-        {
-            RenderService.InvalidateAll();
-            MinimapRenderer.Invalidate();
-        }
+        if (History.Undo(_map)) { RenderService.InvalidateAll(); MinimapRenderer.Invalidate(); }
     }
 
     [RelayCommand]
     private void Redo()
     {
         if (_map is null) return;
-        if (History.Redo(_map))
-        {
-            RenderService.InvalidateAll();
-            MinimapRenderer.Invalidate();
-        }
+        if (History.Redo(_map)) { RenderService.InvalidateAll(); MinimapRenderer.Invalidate(); }
     }
 
-    [RelayCommand]
-    private void ZoomIn()    { Zoom *= 2.0; OnPropertyChanged(nameof(StatusText)); }
+    [RelayCommand] private void ZoomIn()    { Zoom *= 2.0; OnPropertyChanged(nameof(StatusText)); }
+    [RelayCommand] private void ZoomOut()   { Zoom /= 2.0; OnPropertyChanged(nameof(StatusText)); }
+    [RelayCommand] private void ResetZoom() { Zoom = 1.0; OffsetX = 0; OffsetY = 0; OnPropertyChanged(nameof(StatusText)); }
 
-    [RelayCommand]
-    private void ZoomOut()   { Zoom /= 2.0; OnPropertyChanged(nameof(StatusText)); }
-
-    [RelayCommand]
-    private void ResetZoom() { Zoom = 1.0; OffsetX = 0; OffsetY = 0; OnPropertyChanged(nameof(StatusText)); }
-
-    // ── Map interaction ──────────────────────────────────────────────────────────
+    // ── Map interaction ───────────────────────────────────────────────────────
 
     public void LoadMap(WorldMap map, double viewportWidth = 0, double viewportHeight = 0)
     {
