@@ -11,26 +11,28 @@ public sealed class RenderingTests
     [Fact]
     public void RadarColorPalette_ReturnsDeterministicColor()
     {
-        var c1 = RadarColorPalette.GetColor(0x0000);
-        var c2 = RadarColorPalette.GetColor(0x0000);
+        var palette = new RadarColorPalette();
+        var c1 = palette.GetColor(0x0000);
+        var c2 = palette.GetColor(0x0000);
         Assert.Equal(c1, c2);
     }
 
     [Fact]
     public void RadarColorPalette_AdjacentTiles_ReturnsWithoutError()
     {
-        var c1 = RadarColorPalette.GetColor(0x0010);
-        var c2 = RadarColorPalette.GetColor(0x0011);
+        var palette = new RadarColorPalette();
+        var c1 = palette.GetColor(0x0010);
+        var c2 = palette.GetColor(0x0011);
         _ = c1;
         _ = c2;
     }
 
-    // ── FallbackTileTextureProvider ──────────────────────────────────────
+    // ── FallbackTileTextureProvider ────────────────────────────────────────
 
     [Fact]
     public void FallbackTileProvider_HasNoArtwork()
     {
-        var provider = new FallbackTileTextureProvider();
+        var provider = new FallbackTileTextureProvider(new RadarColorPalette());
         Assert.False(provider.HasArtwork);
         Assert.Null(provider.GetLandTileTexture(0));
     }
@@ -40,14 +42,14 @@ public sealed class RenderingTests
     {
         using var bmp = new SKBitmap(44, 44);
         using var canvas = new SKCanvas(bmp);
-        var provider = new FallbackTileTextureProvider();
+        var provider = new FallbackTileTextureProvider(new RadarColorPalette());
 
         var ex = Record.Exception(() =>
             provider.RenderFallbackTile(canvas, 0, 0, 44, 0x1234, 0));
         Assert.Null(ex);
     }
 
-    // ── RenderCache ──────────────────────────────────────────────────────
+    // ── RenderCache ────────────────────────────────────────────────────────
 
     [Fact]
     public void RenderCache_IsDirtyFalseInitially()
@@ -69,7 +71,6 @@ public sealed class RenderingTests
     {
         var cache = new RenderCache();
 
-        // First render two chunks
         var renderCount = 0;
         cache.GetOrRender(0, 0, () => { renderCount++; return new SKBitmap(4, 4); });
         cache.GetOrRender(1, 0, () => { renderCount++; return new SKBitmap(4, 4); });
@@ -95,7 +96,6 @@ public sealed class RenderingTests
         Assert.NotNull(bmp);
         Assert.Equal(1, callCount);
 
-        // Second call — cached
         var bmp2 = cache.GetOrRender(0, 0, () =>
         {
             callCount++;
@@ -147,13 +147,11 @@ public sealed class RenderingTests
         var map = WorldMap.Create(128, 128, "Felucca", SourceFileType.Mul);
         var cache = new RenderCache();
 
-        // Edit a tile to mark chunk dirty
         map.Terrain[10, 10] = 0x0002;
         map.Terrain[10, 64] = 0x0003;
 
         cache.SyncDirtyChunks(map);
 
-        // Chunk (0,0) and (0,1) should be invalidated
         Assert.True(cache.IsDirty(0, 0));
         Assert.True(cache.IsDirty(0, 1));
     }
@@ -186,7 +184,6 @@ public sealed class RenderingTests
 
     // ── MinimapRenderer ──────────────────────────────────────────────────
 
-    // Requires native SkiaSharp runtime — run locally only.
     [Fact, Trait("Category", "Rendering")]
     public void MinimapRenderer_GetOrRender_ReturnsBitmap()
     {
@@ -199,7 +196,6 @@ public sealed class RenderingTests
         Assert.True(bmp.Height > 0);
     }
 
-    // Requires native SkiaSharp runtime — run locally only.
     [Fact, Trait("Category", "Rendering")]
     public void MinimapRenderer_Invalidate_TriggersNewBitmap()
     {
@@ -215,7 +211,6 @@ public sealed class RenderingTests
         Assert.NotSame(bmp1, bmp2);
     }
 
-    // Requires native SkiaSharp runtime — run locally only.
     [Fact, Trait("Category", "Rendering")]
     public void MinimapRenderer_GetOrRender_CachesUntilInvalidate()
     {
@@ -228,7 +223,7 @@ public sealed class RenderingTests
         Assert.Same(bmp1, bmp2);
     }
 
-    // ── MapRenderService ─────────────────────────────────────────────────
+    // ── MapRenderService ───────────────────────────────────────────────────
 
     [Fact]
     public void MapRenderService_Render_EmptyCanvas_DoesNotThrow()
@@ -237,7 +232,6 @@ public sealed class RenderingTests
         using var bmp = new SKBitmap(200, 200);
         using var canvas = new SKCanvas(bmp);
 
-        // Null map
         var ex = Record.Exception(() => service.Render(canvas, null!, 200, 200));
         Assert.Null(ex);
     }
@@ -274,12 +268,10 @@ public sealed class RenderingTests
         var map = WorldMap.Create(128, 128, "Felucca", SourceFileType.Mul);
         var service = new MapRenderService();
 
-        // Edit a tile to make a chunk dirty
         map.Terrain[5, 5] = 0x0001;
 
         service.SyncDirtyChunks(map);
 
-        // Render to consume dirty
         using var bmp = new SKBitmap(200, 200);
         using var canvas = new SKCanvas(bmp);
         service.Render(canvas, map, 200, 200);
@@ -297,8 +289,6 @@ public sealed class RenderingTests
         service.Render(canvas, map, 200, 200);
         service.InvalidateAll();
         service.Render(canvas, map, 200, 200);
-
-        // No exception = pass
     }
 
     [Fact]
@@ -313,8 +303,6 @@ public sealed class RenderingTests
         service.Render(canvas, map, 200, 200);
         service.ClearCache();
         service.Render(canvas, map, 200, 200);
-
-        // No exception = pass
     }
 
     [Fact]
@@ -322,7 +310,7 @@ public sealed class RenderingTests
     {
         var service = new MapRenderService();
         service.Zoom = 100f;
-        Assert.Equal(100f, service.Zoom); // Zoom is not clamped in MapRenderService (clamped during render)
+        Assert.Equal(100f, service.Zoom);
     }
 
     [Fact]
@@ -342,12 +330,12 @@ public sealed class RenderingTests
         }
     }
 
-    // ── ITileTextureProvider ─────────────────────────────────────────────
+    // ── ITileTextureProvider ──────────────────────────────────────────────
 
     [Fact]
     public void ITileTextureProvider_CanBeImplemented()
     {
-        var provider = new FallbackTileTextureProvider();
+        var provider = new FallbackTileTextureProvider(new RadarColorPalette());
         Assert.IsAssignableFrom<ITileTextureProvider>(provider);
     }
 }

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.ObjectModel;
-using System.Timers;
 using Avalonia;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -27,12 +26,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private ViewMode _viewMode = ViewMode.Radar;
     private bool _showTileGrid;
     private bool _showChunkGrid;
-    private Timer? _autosaveTimer;
+    // Fully qualify to avoid ambiguity with System.Threading.Timer
+    private System.Timers.Timer? _autosaveTimer;
 
-    // ── Undo / Redo ───────────────────────────────────────────────────────────
+    // ── Undo / Redo ─────────────────────────────────────────────────────────────────
     public CommandHistory History { get; } = new();
 
-    // ── Tool state ────────────────────────────────────────────────────────────
+    // ── Tool state ────────────────────────────────────────────────────────────────
     public ToolViewModel Tools { get; } = new();
 
     public MainWindowViewModel()
@@ -59,7 +59,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ApplyPreferences(prefs);
     }
 
-    // ── Properties ────────────────────────────────────────────────────────────
+    // ── Properties ────────────────────────────────────────────────────────────────
 
     public RecentFiles RecentFiles { get; }
 
@@ -106,12 +106,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public string ZoomPercent => $"{_zoom * 100:F0}%";
 
-    public int TileX    { get => _tileX;  private set => SetProperty(ref _tileX, value);  }
-    public int TileY    { get => _tileY;  private set => SetProperty(ref _tileY, value);  }
+    public int TileX     { get => _tileX;  private set => SetProperty(ref _tileX, value);  }
+    public int TileY     { get => _tileY;  private set => SetProperty(ref _tileY, value);  }
     public ushort TileId { get => _tileId; private set => SetProperty(ref _tileId, value); }
     public sbyte TileZ   { get => _tileZ;  private set => SetProperty(ref _tileZ, value);  }
 
-    public MapRenderService RenderService  { get; } = new();
+    public MapRenderService RenderService   { get; } = new();
     public MinimapRenderer  MinimapRenderer { get; } = new();
 
     public ViewMode ViewMode
@@ -153,21 +153,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ? "No map loaded"
         : $"Tile: ({_tileX}, {_tileY})  ID: 0x{_tileId:X4}  Z: {_tileZ,4}  Zoom: {ZoomPercent}";
 
-    // Undo / Redo UI helpers
-    public bool CanUndo   => History.CanUndo;
-    public bool CanRedo   => History.CanRedo;
+    public bool CanUndo    => History.CanUndo;
+    public bool CanRedo    => History.CanRedo;
     public string UndoLabel => History.UndoDescription is string d ? $"Undo: {d}" : "Undo";
     public string RedoLabel => History.RedoDescription is string d ? $"Redo: {d}" : "Redo";
 
     public event Action? RequestNewMap;
     public event Action? RequestOpenMap;
 
-    // ── Tool execution (called from code-behind on pointer events) ─────────────
+    // ── Tool execution ───────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Applies the currently active tool at the given tile coordinate.
-    /// Returns true if the map was modified and the viewport needs re-render.
-    /// </summary>
     public bool ApplyTool(int tileX, int tileY)
     {
         if (_map is null) return false;
@@ -190,10 +185,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                     biome.Definition.Tiles.Count > 0 ? biome.Definition.Tiles[0].TileId : (ushort)3),
 
             ActiveTool.Raise =>
-                RaiseTool.Execute(_map, tileX, tileY, t.BrushRadius, (sbyte)Math.Clamp((int)(t.BrushStrength * 5), 1, 10)),
+                RaiseTool.Execute(_map, tileX, tileY, t.BrushRadius,
+                    (sbyte)Math.Clamp((int)(t.BrushStrength * 5), 1, 10)),
 
             ActiveTool.Lower =>
-                LowerTool.Execute(_map, tileX, tileY, t.BrushRadius, (sbyte)Math.Clamp((int)(t.BrushStrength * 5), 1, 10)),
+                LowerTool.Execute(_map, tileX, tileY, t.BrushRadius,
+                    (sbyte)Math.Clamp((int)(t.BrushStrength * 5), 1, 10)),
 
             ActiveTool.Smooth =>
                 SmoothTool.Execute(_map, tileX, tileY, t.BrushRadius, t.BrushStrength),
@@ -221,7 +218,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         return true;
     }
 
-    // ── Public Methods ────────────────────────────────────────────────────────
+    // ── Public Methods ───────────────────────────────────────────────────────────
 
     public void ApplyPreferences(AppPreferences prefs)
     {
@@ -261,14 +258,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         MinimapRenderer.Invalidate();
     }
 
-    // ── Autosave ──────────────────────────────────────────────────────────────
+    // ── Autosave ────────────────────────────────────────────────────────────────
 
     private void RestartAutosave(int intervalSeconds)
     {
         _autosaveTimer?.Stop();
         _autosaveTimer?.Dispose();
         if (intervalSeconds <= 0) return;
-        _autosaveTimer = new Timer(intervalSeconds * 1000.0) { AutoReset = true };
+        _autosaveTimer = new System.Timers.Timer(intervalSeconds * 1000.0) { AutoReset = true };
         _autosaveTimer.Elapsed += (_, _) => TriggerAutosave();
         _autosaveTimer.Start();
     }
@@ -276,11 +273,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private void TriggerAutosave()
     {
         if (_map is null) return;
-        // TODO V1: save to .uomap project file
         System.Diagnostics.Debug.WriteLine($"[Autosave] {DateTime.Now:HH:mm:ss}");
     }
 
-    // ── Commands ──────────────────────────────────────────────────────────────
+    // ── Commands ────────────────────────────────────────────────────────────────
 
     [RelayCommand] private void NewMap()  => RequestNewMap?.Invoke();
     [RelayCommand] private void OpenMap() => RequestOpenMap?.Invoke();
@@ -308,27 +304,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private void ZoomIn()
-    {
-        Zoom *= 2.0;
-        OnPropertyChanged(nameof(StatusText));
-    }
+    private void ZoomIn()    { Zoom *= 2.0; OnPropertyChanged(nameof(StatusText)); }
 
     [RelayCommand]
-    private void ZoomOut()
-    {
-        Zoom /= 2.0;
-        OnPropertyChanged(nameof(StatusText));
-    }
+    private void ZoomOut()   { Zoom /= 2.0; OnPropertyChanged(nameof(StatusText)); }
 
     [RelayCommand]
-    private void ResetZoom()
-    {
-        Zoom = 1.0; OffsetX = 0; OffsetY = 0;
-        OnPropertyChanged(nameof(StatusText));
-    }
+    private void ResetZoom() { Zoom = 1.0; OffsetX = 0; OffsetY = 0; OnPropertyChanged(nameof(StatusText)); }
 
-    // ── Map interaction ───────────────────────────────────────────────────────
+    // ── Map interaction ──────────────────────────────────────────────────────────
 
     public void LoadMap(WorldMap map, double viewportWidth = 0, double viewportHeight = 0)
     {
