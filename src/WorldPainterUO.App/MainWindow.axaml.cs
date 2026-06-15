@@ -8,6 +8,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using SkiaSharp;
+using WorldPainterUO.App.Configuration;
 using WorldPainterUO.App.ViewModels;
 using WorldPainterUO.App.Views;
 using WorldPainterUO.Core;
@@ -90,6 +91,7 @@ public partial class MainWindow : Window
             var dims = UltimaMapReader.DetectDimensions(filePath);
             var reader = new UltimaMapReader();
             var map = reader.Read(filePath, dims);
+            ViewModel.RecentFiles.Add(filePath);
             ViewModel.LoadMap(map,
                 ViewportBorder.Bounds.Width, ViewportBorder.Bounds.Height);
         }
@@ -99,6 +101,33 @@ public partial class MainWindow : Window
                 this,
                 $"Failed to open map:\n{ex.Message}",
                 "Open Error");
+        }
+    }
+
+    private async void OnOpenRecentFile(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { DataContext: RecentFileEntry entry })
+            return;
+
+        if (!File.Exists(entry.Path))
+        {
+            await MessageBox.ShowDialog(this, $"File not found:\n{entry.Path}", "Open Error");
+            ViewModel.RecentFiles.Entries.Remove(entry);
+            return;
+        }
+
+        try
+        {
+            var dims = UltimaMapReader.DetectDimensions(entry.Path);
+            var reader = new UltimaMapReader();
+            var map = reader.Read(entry.Path, dims);
+            ViewModel.RecentFiles.Add(entry.Path);
+            ViewModel.LoadMap(map,
+                ViewportBorder.Bounds.Width, ViewportBorder.Bounds.Height);
+        }
+        catch (Exception ex)
+        {
+            await MessageBox.ShowDialog(this, $"Failed to open map:\n{ex.Message}", "Open Error");
         }
     }
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using WorldPainterUO.App.Configuration;
 using WorldPainterUO.Core;
 using WorldPainterUO.FileFormats;
 using WorldPainterUO.Rendering;
@@ -22,12 +23,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public MainWindowViewModel()
     {
+        RecentFiles = RecentFiles.Load();
         Layers =
         [
             new LayerItem("Terrain", true),
             new LayerItem("Height", true),
         ];
     }
+
+    public RecentFiles RecentFiles { get; }
 
     public string Title => _map is null
         ? "WorldPainterUO"

@@ -13,6 +13,15 @@
             <MenuItem Header="_File">
                 <MenuItem Header="_New Map" Command="{Binding NewMapCommand}" />
                 <MenuItem Header="_Open..." Command="{Binding OpenMapCommand}" />
+                <MenuItem Header="_Recent" x:Name="RecentMenu"
+                          ItemsSource="{Binding RecentFiles.Entries}">
+                    <MenuItem.ItemTemplate>
+                        <DataTemplate>
+                            <MenuItem Header="{Binding Path}"
+                                      Click="OnOpenRecentFile" />
+                        </DataTemplate>
+                    </MenuItem.ItemTemplate>
+                </MenuItem>
                 <Separator />
                 <MenuItem Header="E_xit" />
             </MenuItem>
