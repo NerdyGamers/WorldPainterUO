@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Ultima/Ultima.csproj" />
     <Project Path="src/WorldPainterUO.App/WorldPainterUO.App.csproj" />
     <Project Path="src/WorldPainterUO.Core/WorldPainterUO.Core.csproj" />
     <Project Path="src/WorldPainterUO.Editor/WorldPainterUO.Editor.csproj" />
