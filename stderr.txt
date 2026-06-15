@@ -1,0 +1,16 @@
+Unhandled exception. System.ArgumentException: Requested value 'Ctrl,OemPlus' was not found.
+   at System.Enum.TryParseByName[TStorage](RuntimeType enumType, ReadOnlySpan`1 value, Boolean ignoreCase, Boolean throwOnFailure, TStorage& result)
+   at System.Enum.TryParseByValueOrName[TUnderlying,TStorage](RuntimeType enumType, ReadOnlySpan`1 value, Boolean ignoreCase, Boolean throwOnFailure, TUnderlying& result)
+   at System.Enum.Parse[TEnum](String value, Boolean ignoreCase)
+   at Avalonia.Input.KeyGesture.ParseModifier(ReadOnlySpan`1 modifier)
+   at Avalonia.Input.KeyGesture.Parse(String gesture)
+   at WorldPainterUO.App.MainWindow.!XamlIlPopulate(IServiceProvider, MainWindow) in D:\Users\jared\Documents\GitHub\WorldPainterUO\src\WorldPainterUO.App\MainWindow.axaml:line 20
+   at WorldPainterUO.App.MainWindow.!XamlIlPopulateTrampoline(MainWindow)
+   at WorldPainterUO.App.MainWindow.InitializeComponent(Boolean loadXaml) in D:\Users\jared\Documents\GitHub\WorldPainterUO\src\WorldPainterUO.App\obj\Debug\net8.0\Avalonia.Generators\Avalonia.Generators.NameGenerator.AvaloniaNameIncrementalGenerator\WorldPainterUO.App.MainWindow.g.cs:line 27
+   at WorldPainterUO.App.MainWindow..ctor() in D:\Users\jared\Documents\GitHub\WorldPainterUO\src\WorldPainterUO.App\MainWindow.axaml.cs:line 27
+   at WorldPainterUO.App.App.OnFrameworkInitializationCompleted() in D:\Users\jared\Documents\GitHub\WorldPainterUO\src\WorldPainterUO.App\App.axaml.cs:line 29
+   at Avalonia.AppBuilder.SetupUnsafe()
+   at Avalonia.AppBuilder.Setup()
+   at Avalonia.AppBuilder.SetupWithLifetime(IApplicationLifetime lifetime)
+   at Avalonia.ClassicDesktopStyleApplicationLifetimeExtensions.StartWithClassicDesktopLifetime(AppBuilder builder, String[] args, Action`1 lifetimeBuilder)
+   at WorldPainterUO.App.Program.Main(String[] args) in D:\Users\jared\Documents\GitHub\WorldPainterUO\src\WorldPainterUO.App\Program.cs:line 12

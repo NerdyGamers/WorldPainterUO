@@ -36,13 +36,53 @@ This repository is structured so Codex can implement the app milestone-by-milest
 3. Review the diff and verify the build passes.
 4. Continue one milestone at a time.
 
-## Solution layout (target)
+## Building
+
+```bash
+dotnet build
+```
+
+## Running tests
+
+```bash
+dotnet test
+```
+
+## Publishing
+
+Self-contained single-file executables for all three platforms:
+
+```powershell
+# All platforms
+.\scripts\publish.ps1 v1.0.0
+
+# Or individually:
+dotnet publish src/WorldPainterUO.App -c Release -r win-x64  --self-contained true /p:PublishSingleFile=true
+dotnet publish src/WorldPainterUO.App -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true
+dotnet publish src/WorldPainterUO.App -c Release -r osx-x64  --self-contained true
+```
+
+Outputs go to `publish/v1.0.0/`.
+
+## GitHub Releases
+
+Tag a commit with `v*` (e.g., `v1.0.0`) to trigger the release workflow, which builds all three platforms and uploads archives as release assets.
+
+## Solution layout
 
 ```text
 WorldPainterUO/
 ├── .github/
 │   └── workflows/
-│       └── dotnet-ci.yml
+│       ├── dotnet-ci.yml
+│       └── release.yml
+├── assets/
+│   └── stamps/
+│       ├── mountain_range.json
+│       ├── lake.json
+│       └── forest_cluster.json
+├── scripts/
+│   └── publish.ps1
 ├── src/
 │   ├── WorldPainterUO.Core/
 │   ├── WorldPainterUO.FileFormats/
@@ -57,6 +97,7 @@ WorldPainterUO/
 │       └── synthetic/
 ├── AGENTS.md
 ├── ARCHITECTURE.md
+├── CHANGELOG.md
 ├── IMPLEMENTATION_PLAN.md
 ├── PROMPTS.md
 ├── README.md

@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WorldPainterUO.App/WorldPainterUO.App.csproj" />
+    <Project Path="src/WorldPainterUO.Core/WorldPainterUO.Core.csproj" />
+    <Project Path="src/WorldPainterUO.Editor/WorldPainterUO.Editor.csproj" />
+    <Project Path="src/WorldPainterUO.FileFormats/WorldPainterUO.FileFormats.csproj" />
+    <Project Path="src/WorldPainterUO.Project/WorldPainterUO.Project.csproj" />
+    <Project Path="src/WorldPainterUO.Rendering/WorldPainterUO.Rendering.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WorldPainterUO.Tests/WorldPainterUO.Tests.csproj" />
+  </Folder>
+</Solution>

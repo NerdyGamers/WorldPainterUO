@@ -1,0 +1,93 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:WorldPainterUO.App.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+        x:Class="WorldPainterUO.App.MainWindow"
+        Title="{Binding Title}"
+        Width="1200"
+        Height="800">
+    <DockPanel>
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_File">
+                <MenuItem Header="_New Map" Command="{Binding NewMapCommand}" />
+                <MenuItem Header="_Open..." Command="{Binding OpenMapCommand}" />
+                <Separator />
+                <MenuItem Header="E_xit" />
+            </MenuItem>
+            <MenuItem Header="_View">
+                <MenuItem Header="Zoom _In" Command="{Binding ZoomInCommand}" InputGesture="Ctrl+OemPlus" />
+                <MenuItem Header="Zoom _Out" Command="{Binding ZoomOutCommand}" InputGesture="Ctrl+OemMinus" />
+                <MenuItem Header="_Reset Zoom" Command="{Binding ResetZoomCommand}" InputGesture="Ctrl+D0" />
+            </MenuItem>
+        </Menu>
+
+        <Grid ColumnDefinitions="*,220">
+            <!-- Viewport -->
+            <Border Grid.Column="0"
+                    Background="#1a1a2e"
+                    x:Name="ViewportBorder"
+                    PointerMoved="OnViewportPointerMoved"
+                    PointerWheelChanged="OnViewportPointerWheelChanged"
+                    PointerPressed="OnViewportPointerPressed"
+                    PointerReleased="OnViewportPointerReleased"
+                    SizeChanged="OnViewportSizeChanged">
+                <Image x:Name="ViewportImage"
+                       Stretch="None"
+                       HorizontalAlignment="Left"
+                       VerticalAlignment="Top" />
+            </Border>
+
+            <!-- Right Panel -->
+            <Border Grid.Column="1" Background="#2d2d3f" Padding="8">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Layers" FontWeight="Bold" Foreground="#ccc" />
+                    <ItemsControl ItemsSource="{Binding Layers}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox IsChecked="{Binding Visible}"
+                                          Content="{Binding Name}"
+                                          Foreground="#ccc"
+                                          Margin="0,2" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <Separator />
+
+                    <TextBlock Text="Minimap" FontWeight="Bold" Foreground="#ccc" />
+                    <Border Background="#1a1a2e"
+                            Width="180"
+                            Height="180"
+                            CornerRadius="4">
+                        <TextBlock Text="(minimap)"
+                                   Foreground="#555"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontSize="11" />
+                    </Border>
+
+                    <Separator />
+
+                    <TextBlock Text="Tile Info" FontWeight="Bold" Foreground="#ccc" />
+                    <TextBlock Text="{Binding StatusText}"
+                               Foreground="#aaa"
+                               FontSize="11"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Status bar -->
+        <Border DockPanel.Dock="Bottom"
+                Background="#1e1e30"
+                Padding="8,4"
+                BorderBrush="#333"
+                BorderThickness="0,1,0,0">
+            <TextBlock Text="{Binding StatusText}"
+                       Foreground="#aaa"
+                       FontSize="12" />
+        </Border>
+    </DockPanel>
+</Window>

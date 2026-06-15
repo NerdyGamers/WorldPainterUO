@@ -1,0 +1,28 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="WorldPainterUO.App.Views.NewMapDialog"
+        Title="Map Dimensions"
+        Width="320"
+        Height="220"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+    <StackPanel Margin="16" Spacing="12">
+        <Label FontWeight="Bold">Enter map dimensions</Label>
+
+        <Grid ColumnDefinitions="100,*" RowDefinitions="Auto,Auto,Auto">
+            <Label Grid.Row="0" Grid.Column="0" VerticalAlignment="Center">Width (tiles):</Label>
+            <TextBox Grid.Row="0" Grid.Column="1" x:Name="WidthBox" Text="256" />
+
+            <Label Grid.Row="1" Grid.Column="0" VerticalAlignment="Center">Height (tiles):</Label>
+            <TextBox Grid.Row="1" Grid.Column="1" x:Name="HeightBox" Text="256" />
+
+            <Label Grid.Row="2" Grid.Column="0" VerticalAlignment="Center">Facet:</Label>
+            <TextBox Grid.Row="2" Grid.Column="1" x:Name="FacetBox" Text="Britannia" />
+        </Grid>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Content="Cancel" Click="OnCancel" />
+            <Button Content="OK" IsDefault="True" Click="OnOk" />
+        </StackPanel>
+    </StackPanel>
+</Window>

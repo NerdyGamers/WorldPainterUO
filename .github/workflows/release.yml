@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+            suffix: win-x64
+            single-file: true
+          - rid: linux-x64
+            os: ubuntu-latest
+            suffix: linux-x64
+            single-file: true
+          - rid: osx-x64
+            os: macos-latest
+            suffix: osx-x64
+            single-file: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build --verbosity normal
+
+      - name: Publish ${{ matrix.rid }}
+        run: |
+          dotnet publish src/WorldPainterUO.App/WorldPainterUO.App.csproj `
+            --configuration Release `
+            --runtime ${{ matrix.rid }} `
+            --output publish/${{ matrix.suffix }} `
+            --self-contained true `
+            ${{ matrix.single-file && '/p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true' || '' }}
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WorldPainterUO-${{ matrix.suffix }}
+          path: publish/${{ matrix.suffix }}
+
+  create-release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create archives
+        run: |
+          cd artifacts
+          for dir in */; do
+            name="${dir%/}"
+            if [ "$RUNNER_OS" = "Linux" ]; then
+              tar czf "../$name.tar.gz" "$name"
+            fi
+          done
+
+      - name: Generate release notes
+        run: |
+          echo "## WorldPainterUO ${{ github.ref_name }}" > release-notes.md
+          echo "" >> release-notes.md
+          echo "See CHANGELOG.md for details." >> release-notes.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: WorldPainterUO ${{ github.ref_name }}
+          body_path: release-notes.md
+          files: |
+            artifacts/*.tar.gz
+            artifacts/*.zip
