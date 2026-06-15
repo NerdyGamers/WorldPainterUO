@@ -9,6 +9,12 @@ namespace WorldPainterUO.FileFormats;
 /// Reads Ultima Online map0..5.mul / mapXLegacyMUL.uop files into a <see cref="WorldMap"/>.
 /// Each map is stored as a series of 8×8 tile blocks (196 bytes each).
 /// Block layout: 4-byte header + 64 × (ushort tileId, sbyte z) = 4 + 192 = 196 bytes.
+///
+/// IMPORTANT — on-disk block order is COLUMN-MAJOR:
+///   [block(bx=0,by=0)][block(bx=0,by=1)]...[block(bx=0,by=maxBY-1)]
+///   [block(bx=1,by=0)][block(bx=1,by=1)]...
+/// i.e. the outer file loop is bx, the inner loop is by.
+/// Within each block, tiles are stored row-major: tx is the inner loop.
 /// </summary>
 public sealed class UltimaMapReader
 {
@@ -26,7 +32,7 @@ public sealed class UltimaMapReader
         { 5, (1280, 4096, "TerMur")   },   // map5.mul
     };
 
-    // Fallback: unique file sizes for maps that don’t collide.
+    // Fallback: unique file sizes for maps that don't collide.
     // Malas and TerMur are intentionally absent — use filename detection instead.
     private static readonly Dictionary<long, (int Width, int Height, string Facet)> KnownBySize = new()
     {
@@ -79,11 +85,14 @@ public sealed class UltimaMapReader
         var blocksX = dims.Width  / 8;
         var blocksY = dims.Height / 8;
 
-        for (var by = 0; by < blocksY; by++)
+        // UO on-disk layout is COLUMN-MAJOR: outer=bx, inner=by.
+        // Swapping these loops was the cause of horizontal banding corruption.
         for (var bx = 0; bx < blocksX; bx++)
+        for (var by = 0; by < blocksY; by++)
         {
             br.ReadUInt32(); // 4-byte block header (unused)
 
+            // Within each block, tiles are row-major: inner=tx.
             for (var ty = 0; ty < 8; ty++)
             for (var tx = 0; tx < 8; tx++)
             {
