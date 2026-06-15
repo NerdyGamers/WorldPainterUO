@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -9,4 +9,10 @@
   <ItemGroup>
     <ProjectReference Include="..\WorldPainterUO.Core\WorldPainterUO.Core.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Ultima SDK: battle-tested MUL/UOP reader used by ClassicUO and RunUO tooling -->
+    <PackageReference Include="Ultima" Version="5.0.8.3" />
+  </ItemGroup>
+
 </Project>
