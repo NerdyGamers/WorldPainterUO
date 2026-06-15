@@ -6,8 +6,7 @@ namespace WorldPainterUO.Rendering;
 /// <summary>
 /// Provides radar colors for land and static tile IDs.
 /// Delegates to <see cref="Ultima.RadarCol"/> from the Ultima SDK when a
-/// UO data path has been set, which correctly handles radarcol.mul loading
-/// and the BGR555 → RGB conversion internally.
+/// UO data path has been set, which correctly handles radarcol.mul loading.
 /// Falls back to a deterministic palette when no data path is available.
 /// </summary>
 public class RadarColorPalette
@@ -25,7 +24,6 @@ public class RadarColorPalette
 
         try
         {
-            // The SDK uses a global data path; set it before accessing RadarCol.
             Ultima.Files.SetMulPath(uoDataPath);
             // Force the SDK to load radarcol.mul now.
             _ = Ultima.RadarCol.GetLandColor(0);
@@ -43,10 +41,8 @@ public class RadarColorPalette
     public SKColor GetColor(ushort tileId)
     {
         if (_loaded)
-        {
-            var c = Ultima.RadarCol.GetLandColor(tileId);
-            return new SKColor(c.R, c.G, c.B);
-        }
+            return Bgr555ToSKColor(Ultima.RadarCol.GetLandColor(tileId));
+
         return FallbackColor(tileId);
     }
 
@@ -55,10 +51,24 @@ public class RadarColorPalette
     {
         if (_loaded)
         {
-            var c = Ultima.RadarCol.GetStaticColor(staticId);
-            return new SKColor(c.R, c.G, c.B);
+            // radarcol.mul stores static colors starting at index 0x4000.
+            // The SDK's GetLandColor accepts the raw index directly.
+            return Bgr555ToSKColor(Ultima.RadarCol.GetLandColor(0x4000 + staticId));
         }
+
         return FallbackColor(staticId);
+    }
+
+    /// <summary>
+    /// Converts a BGR555 ushort (as returned by RadarCol.GetLandColor) to an SKColor.
+    /// Format: bits 14-10 = B, bits 9-5 = G, bits 4-0 = R, each 5-bit channel scaled to 8-bit.
+    /// </summary>
+    private static SKColor Bgr555ToSKColor(ushort bgr555)
+    {
+        byte r = (byte)(((bgr555 >>  0) & 0x1F) * 255 / 31);
+        byte g = (byte)(((bgr555 >>  5) & 0x1F) * 255 / 31);
+        byte b = (byte)(((bgr555 >> 10) & 0x1F) * 255 / 31);
+        return new SKColor(r, g, b);
     }
 
     private static SKColor FallbackColor(ushort tileId)

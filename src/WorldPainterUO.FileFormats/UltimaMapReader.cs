@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using Ultima;
 using WorldPainterUO.Core;
+
+// NOTE: Do NOT add 'using Ultima' here — the compiler resolves Ultima.Map as
+// WorldPainterUO.FileFormats.Ultima.Map (which does not exist) due to the
+// project's own namespace prefix. Use fully-qualified Ultima.* names throughout.
 
 namespace WorldPainterUO.FileFormats;
 
@@ -67,14 +70,12 @@ public sealed class UltimaMapReader
         var dataDir = Path.GetDirectoryName(filePath) ?? string.Empty;
 
         // Point the Ultima SDK at the folder containing the map file.
-        // This sets the global Files.RootDir used by all SDK accessors.
-        Files.SetMulPath(dataDir);
+        Ultima.Files.SetMulPath(dataDir);
 
         // Determine the map index from dims.Facet so the SDK loads the right map.
         var mapIndex = FacetToMapIndex(dims.Facet, filePath);
 
-        // Ultima.Map exposes a fully-decoded tile array — block order,
-        // UOP unpacking, and header skipping are all handled internally.
+        // Fully-qualified to avoid namespace collision with WorldPainterUO.FileFormats.Ultima
         var sdkMap = new Ultima.Map(mapIndex, dims.Width, dims.Height);
 
         var worldMap = WorldMap.Create(dims.Width, dims.Height, dims.Facet, SourceFileType.Mul);
@@ -82,7 +83,6 @@ public sealed class UltimaMapReader
         for (var x = 0; x < dims.Width; x++)
         for (var y = 0; y < dims.Height; y++)
         {
-            // Ultima.Map.Tiles[x, y] returns a HuedTile with .ID and .Z
             var tile = sdkMap.Tiles.GetLandTile(x, y);
             worldMap.Terrain[x, y] = (ushort)tile.ID;
             worldMap.Height [x, y] = (sbyte)tile.Z;
@@ -93,12 +93,10 @@ public sealed class UltimaMapReader
 
     private static int FacetToMapIndex(string facet, string filePath)
     {
-        // Try to extract the index from the filename first (most reliable).
         var baseName = Path.GetFileNameWithoutExtension(filePath).ToLowerInvariant();
         for (var i = 0; i <= 5; i++)
             if (baseName.Contains($"map{i}")) return i;
 
-        // Fallback: match by facet name.
         return facet.ToLowerInvariant() switch
         {
             "felucca"  => 0,
