@@ -1,4 +1,5 @@
 /.vs
+/.localpilot
 /bin/
 /obj/
 *.user

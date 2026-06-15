@@ -52,8 +52,17 @@ public sealed class MapRenderService
 
         canvas.Clear(new SKColor(0x1a, 0x1a, 0x2e));
 
-        // Compute visible chunk range
         var chunkSize = MapChunk<ushort>.Size;
+
+        // When chunks are smaller than 2px on screen, render directly tile-by-tile
+        // to avoid creating millions of chunk bitmaps (OOM risk).
+        if (chunkSize * zoom < 4f)
+        {
+            RenderDirect(canvas, map, dims, zoom, width, height);
+            return;
+        }
+
+        // Compute visible chunk range
         var startCX = Math.Max(0, (int)Math.Floor(-OffsetX / chunkSize));
         var startCY = Math.Max(0, (int)Math.Floor(-OffsetY / chunkSize));
         var endCX = Math.Min(dims.ChunksX,
@@ -86,6 +95,43 @@ public sealed class MapRenderService
             OffsetX, OffsetY, zoom,
             width, height,
             ShowTileGrid, ShowChunkGrid);
+    }
+
+    /// <summary>
+    /// Direct tile-by-tile rendering for very zoomed-out views.
+    /// Writes each tile as a single pixel to a viewport-sized bitmap,
+    /// avoiding OOM from creating millions of chunk bitmaps.
+    /// </summary>
+    private void RenderDirect(SKCanvas canvas, WorldMap map, MapDimensions dims,
+        float zoom, int width, int height)
+    {
+        using var bmp = new SKBitmap(width, height);
+
+        for (var py = 0; py < height; py++)
+        {
+            var tileY = (int)((py / zoom) - OffsetY);
+            if (tileY < 0 || tileY >= dims.Height)
+                continue;
+
+            for (var px = 0; px < width; px++)
+            {
+                var tileX = (int)((px / zoom) - OffsetX);
+                if (tileX < 0 || tileX >= dims.Width)
+                    continue;
+
+                var id = map.Terrain[tileX, tileY];
+                var z = map.Height[tileX, tileY];
+                var color = RadarColorPalette.GetColor(id);
+                var heightFactor = Math.Clamp((z + 100) / 227.0f, 0.3f, 1.0f);
+
+                bmp.SetPixel(px, py, new SKColor(
+                    (byte)(color.Red * heightFactor),
+                    (byte)(color.Green * heightFactor),
+                    (byte)(color.Blue * heightFactor)));
+            }
+        }
+
+        canvas.DrawBitmap(bmp, 0, 0);
     }
 
     private SKBitmap RenderChunk(WorldMap map, int cx, int cy)

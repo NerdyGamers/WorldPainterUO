@@ -70,11 +70,8 @@
                             Width="180"
                             Height="180"
                             CornerRadius="4">
-                        <TextBlock Text="(minimap)"
-                                   Foreground="#555"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   FontSize="11" />
+                        <Image x:Name="MinimapImage"
+                               Stretch="Uniform" />
                     </Border>
 
                     <Separator />

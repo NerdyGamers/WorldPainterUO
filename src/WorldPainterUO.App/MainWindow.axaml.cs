@@ -22,6 +22,8 @@ public partial class MainWindow : Window
     private bool _isPanning;
     private Point _lastPanPoint;
     private bool _needsRender = true;
+    private Bitmap? _prevViewport;
+    private Bitmap? _prevMinimap;
 
     public MainWindow()
     {
@@ -45,13 +47,16 @@ public partial class MainWindow : Window
 
         Loaded += (_, _) => _needsRender = true;
 
-        var timer = new DispatcherTimer(
+            var timer = new DispatcherTimer(
             TimeSpan.FromMilliseconds(50),
             DispatcherPriority.Render,
             (_, _) =>
             {
                 if (_needsRender)
+                {
                     RenderViewport();
+                    UpdateMinimap();
+                }
             });
         timer.Start();
     }
@@ -165,12 +170,35 @@ public partial class MainWindow : Window
             using var data = image.Encode(SKEncodedImageFormat.Png, 100);
             using var ms = new MemoryStream(data.ToArray());
 
-            var avaloniaBitmap = new Bitmap(ms);
-            ViewportImage.Source = avaloniaBitmap;
+            _prevViewport?.Dispose();
+            _prevViewport = new Bitmap(ms);
+            ViewportImage.Source = _prevViewport;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Render error: {ex}");
+        }
+    }
+
+    private void UpdateMinimap()
+    {
+        if (ViewModel.Map is null)
+            return;
+
+        try
+        {
+            var bmp = ViewModel.MinimapRenderer.GetOrRender(ViewModel.Map, 180);
+            using var image = SKImage.FromBitmap(bmp);
+            using var data = image.Encode(SKEncodedImageFormat.Png, 80);
+            using var ms = new MemoryStream(data.ToArray());
+
+            _prevMinimap?.Dispose();
+            _prevMinimap = new Bitmap(ms);
+            MinimapImage.Source = _prevMinimap;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Minimap error: {ex}");
         }
     }
 
