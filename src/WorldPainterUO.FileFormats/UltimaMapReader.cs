@@ -3,15 +3,17 @@ using System.Collections.Generic;
 using System.IO;
 using WorldPainterUO.Core;
 
-// NOTE: Do NOT add 'using Ultima' here — the compiler resolves Ultima.Map as
-// WorldPainterUO.FileFormats.Ultima.Map (which does not exist) due to the
-// project's own namespace prefix. Use fully-qualified Ultima.* names throughout.
+// 'using Ultima' is intentionally omitted.
+// Inside namespace WorldPainterUO.FileFormats, the compiler resolves
+// 'Ultima.X' as 'WorldPainterUO.FileFormats.Ultima.X' (which doesn't exist).
+// The fix is to use the 'global::Ultima.*' prefix which roots the lookup
+// at the global namespace, bypassing the project namespace entirely.
 
 namespace WorldPainterUO.FileFormats;
 
 /// <summary>
 /// Reads Ultima Online map files into a <see cref="WorldMap"/> using the
-/// Ultima SDK (Ultima.dll).  All block layout, column-major ordering, and
+/// Ultima SDK (Ultima.dll). All block layout, column-major ordering, and
 /// UOP unpacking is handled by the SDK — we simply walk the tile array it
 /// exposes and copy values into our internal model.
 /// </summary>
@@ -69,14 +71,13 @@ public sealed class UltimaMapReader
     {
         var dataDir = Path.GetDirectoryName(filePath) ?? string.Empty;
 
-        // Point the Ultima SDK at the folder containing the map file.
-        Ultima.Files.SetMulPath(dataDir);
+        // global:: roots the lookup at the assembly/global namespace level,
+        // preventing the compiler from prepending WorldPainterUO.FileFormats.
+        global::Ultima.Files.SetMulPath(dataDir);
 
-        // Determine the map index from dims.Facet so the SDK loads the right map.
         var mapIndex = FacetToMapIndex(dims.Facet, filePath);
 
-        // Fully-qualified to avoid namespace collision with WorldPainterUO.FileFormats.Ultima
-        var sdkMap = new Ultima.Map(mapIndex, dims.Width, dims.Height);
+        var sdkMap = new global::Ultima.Map(mapIndex, dims.Width, dims.Height);
 
         var worldMap = WorldMap.Create(dims.Width, dims.Height, dims.Facet, SourceFileType.Mul);
 
