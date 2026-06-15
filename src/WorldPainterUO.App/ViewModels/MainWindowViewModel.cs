@@ -168,7 +168,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ? b.Definition.Tiles[0].TileId
             : (ushort)3;
 
-        // amount must be sbyte before passing to raise/lower tools
+        // Both Raise and Lower take a positive sbyte amount; Lower negates internally.
         var amount = (sbyte)Math.Clamp((int)(t.BrushStrength * 5), 1, 10);
 
         ICommand? cmd = t.ActiveTool switch
@@ -191,12 +191,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ActiveTool.Raise =>
                 RaiseTool.Execute(_map, tileX, tileY, t.BrushRadius, amount),
 
-            // LowerTool: same signature as RaiseTool, negate amount
+            // LowerTool: same signature — takes positive amount and subtracts internally
             ActiveTool.Lower =>
-                LowerTool.Execute(_map, tileX, tileY, t.BrushRadius,
-                    (sbyte)Math.Clamp(-amount, -128, -1)),
+                LowerTool.Execute(_map, tileX, tileY, t.BrushRadius, amount),
 
-            // SmoothTool: (map, cx, cy, radius, selection?)  — no strength param
+            // SmoothTool: (map, cx, cy, radius, selection?) — no strength param
             ActiveTool.Smooth =>
                 SmoothTool.Execute(_map, tileX, tileY, t.BrushRadius),
 
@@ -209,12 +208,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 NoiseTool.Execute(_map, tileX, tileY, t.BrushRadius, (int)(t.BrushStrength * 10)),
 
             // ReplaceTool: (map, findTileId, replaceTileId, bounds?, selection?)
-            // Replace the tile currently under the cursor with the active biome tile.
             ActiveTool.Replace when t.ActiveBiome is not null =>
                 ReplaceTool.Execute(
                     _map,
-                    _map.Terrain[tileX, tileY],   // findTileId
-                    tileId),                        // replaceTileId
+                    _map.Terrain[tileX, tileY],
+                    tileId),
 
             _ => null,
         };
