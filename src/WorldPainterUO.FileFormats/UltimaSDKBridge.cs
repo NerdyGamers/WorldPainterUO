@@ -9,19 +9,37 @@ namespace WorldPainterUO.FileFormats;
 
 /// <summary>
 /// Central bridge to the Ultima SDK (Ultima.dll / Ultima source project).
-/// All SDK calls in WorldPainterUO go through this class — no other file should
-/// reference global::Ultima.* directly. This keeps the namespace collision issue
-/// contained in one place and makes future SDK swaps trivial.
+/// All SDK calls in WorldPainterUO go through this class.
+///
+/// PATH PRIORITY RULES:
+///   1. Settings path (set via <see cref="InitializeFromSettings"/>) always wins.
+///      This is the user's UO client data folder (contains radarcol.mul, tiledata.mul, art.mul, etc.).
+///   2. Map file directory is used as a fallback ONLY when no Settings path has been set.
+///      This handles the simple case where map files live next to client data.
+///
+/// Calling <see cref="InitializeFromSettings"/> with a new path always re-initializes
+/// the SDK and clears the radar color loaded flag so callers can reload colors.
 /// </summary>
 public static class UltimaSDKBridge
 {
-    private static string? _loadedPath;
+    private static string? _settingsPath;   // Set by user via Settings dialog
+    private static string? _fallbackPath;   // Map file directory, used only when _settingsPath is null
     private static bool _initialized;
+    private static bool _radarColLoaded;
 
-    // ── Pre-built SDK map instances (stateful singletons in the SDK) ──────────
-    // These are the correct entry points — do NOT call new Ultima.Map(...)
-    // as the constructor arguments differ across SDK versions and the static
-    // instances carry correct block counts, cache state, and UOP support.
+    /// <summary>
+    /// Whether the bridge has been pointed at a valid Settings-provided UO data path.
+    /// When true, map-file-directory fallback is ignored.
+    /// </summary>
+    public static bool HasSettingsPath => !string.IsNullOrWhiteSpace(_settingsPath);
+
+    /// <summary>
+    /// The active data path the SDK is currently pointing at.
+    /// Returns the Settings path if set, otherwise the fallback map-directory path.
+    /// </summary>
+    public static string? ActivePath => HasSettingsPath ? _settingsPath : _fallbackPath;
+
+    // ── Pre-built SDK map instances ───────────────────────────────────────────
     private static global::Ultima.Map SDKMap(int mapIndex) => mapIndex switch
     {
         0 => global::Ultima.Map.Felucca,
@@ -34,30 +52,53 @@ public static class UltimaSDKBridge
     };
 
     /// <summary>
-    /// Points the Ultima SDK at <paramref name="dataPath"/> and forces it to
-    /// initialize its file table. Safe to call multiple times — reinitializes
-    /// only when the path changes.
+    /// Called on app startup and whenever the user changes the UO data path in Settings.
+    /// This path takes priority over any map-file-directory fallback.
+    /// Always re-initializes the SDK so new radar/art/tiledata files are picked up.
     /// </summary>
-    public static void Initialize(string dataPath)
+    public static void InitializeFromSettings(string? dataPath)
     {
-        if (_initialized && _loadedPath == dataPath)
+        if (string.IsNullOrWhiteSpace(dataPath))
+        {
+            _settingsPath = null;
+            // If we have a fallback path already, stay on it.
+            if (_fallbackPath != null)
+                ApplyPath(_fallbackPath);
+            return;
+        }
+
+        _settingsPath = dataPath;
+        _radarColLoaded = false; // force radar reload
+        ApplyPath(dataPath);
+    }
+
+    /// <summary>
+    /// Called by <see cref="UltimaMapReader"/> when opening a map file.
+    /// Only takes effect if no Settings path has been configured — never
+    /// overrides the user's explicitly chosen UO data folder.
+    /// </summary>
+    public static void InitializeFromMapDirectory(string mapDirectory)
+    {
+        _fallbackPath = mapDirectory;
+
+        // Settings path always wins — don't touch the SDK if it's already set.
+        if (HasSettingsPath)
             return;
 
-        global::Ultima.Files.SetMulPath(dataPath);
-        _loadedPath = dataPath;
-        _initialized = true;
+        ApplyPath(mapDirectory);
     }
 
     /// <summary>
     /// Reads every land tile in the map at <paramref name="mapIndex"/> into
-    /// <paramref name="worldMap"/>. The SDK handles column-major block ordering,
-    /// UOP decompression, and MUL seeking automatically.
+    /// <paramref name="worldMap"/>. The SDK handles block ordering and UOP
+    /// decompression automatically.
     /// </summary>
     public static void ReadMapTiles(int mapIndex, WorldMap worldMap)
     {
         if (!_initialized)
             throw new InvalidOperationException(
-                "UltimaSDKBridge.Initialize(dataPath) must be called before reading map tiles.");
+                "UltimaSDKBridge must be initialized before reading map tiles. " +
+                "Call InitializeFromSettings or InitializeFromMapDirectory first.");
 
         var sdk = SDKMap(mapIndex);
         var w = worldMap.Width;
@@ -74,7 +115,6 @@ public static class UltimaSDKBridge
 
     /// <summary>
     /// Returns the BGR555 radar color for a land tile ID.
-    /// Indexes directly into radarcol.mul via the SDK.
     /// </summary>
     public static ushort GetLandRadarColor(int tileId)
     {
@@ -92,13 +132,18 @@ public static class UltimaSDKBridge
         return global::Ultima.RadarCol.GetLandColor(0x4000 + staticId);
     }
 
-    // Force the SDK to load radarcol.mul on first radar-color access.
-    private static bool _radarColLoaded;
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    private static void ApplyPath(string path)
+    {
+        global::Ultima.Files.SetMulPath(path);
+        _initialized = true;
+    }
+
     private static void EnsureRadarCol()
     {
         if (_radarColLoaded) return;
-        // Touch index 0 to trigger lazy file load inside the SDK.
-        _ = global::Ultima.RadarCol.GetLandColor(0);
+        _ = global::Ultima.RadarCol.GetLandColor(0); // trigger lazy load
         _radarColLoaded = true;
     }
 }
