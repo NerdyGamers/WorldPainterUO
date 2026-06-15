@@ -6,8 +6,7 @@ using WorldPainterUO.Core;
 // 'using Ultima' is intentionally omitted.
 // Inside namespace WorldPainterUO.FileFormats, the compiler resolves
 // 'Ultima.X' as 'WorldPainterUO.FileFormats.Ultima.X' (which doesn't exist).
-// The fix is to use the 'global::Ultima.*' prefix which roots the lookup
-// at the global namespace, bypassing the project namespace entirely.
+// Use global::Ultima.* to root all SDK lookups at the global namespace.
 
 namespace WorldPainterUO.FileFormats;
 
@@ -71,21 +70,23 @@ public sealed class UltimaMapReader
     {
         var dataDir = Path.GetDirectoryName(filePath) ?? string.Empty;
 
-        // global:: roots the lookup at the assembly/global namespace level,
-        // preventing the compiler from prepending WorldPainterUO.FileFormats.
+        // Point the Ultima SDK at the folder containing the map file.
         global::Ultima.Files.SetMulPath(dataDir);
 
         var mapIndex = FacetToMapIndex(dims.Facet, filePath);
 
-        var sdkMap = new global::Ultima.Map(mapIndex, dims.Width, dims.Height);
+        // Map(int fileIndex, int mapId, int width, int height) — 4 args.
+        // For standard facets fileIndex == mapId; both use mapIndex.
+        var sdkMap = new global::Ultima.Map(mapIndex, mapIndex, dims.Width, dims.Height);
 
         var worldMap = WorldMap.Create(dims.Width, dims.Height, dims.Facet, SourceFileType.Mul);
 
         for (var x = 0; x < dims.Width; x++)
         for (var y = 0; y < dims.Height; y++)
         {
+            // GetLandTile returns Ultima.Tile; the property is .Id (not .ID)
             var tile = sdkMap.Tiles.GetLandTile(x, y);
-            worldMap.Terrain[x, y] = (ushort)tile.ID;
+            worldMap.Terrain[x, y] = (ushort)tile.Id;
             worldMap.Height [x, y] = (sbyte)tile.Z;
         }
 
