@@ -32,6 +32,18 @@
             </MenuItem>
         </Menu>
 
+        <!-- Status bar declared BEFORE the fill child so DockPanel gives the Grid all remaining height -->
+        <Border DockPanel.Dock="Bottom"
+                Background="#1e1e30"
+                Padding="8,4"
+                BorderBrush="#333"
+                BorderThickness="0,1,0,0">
+            <TextBlock Text="{Binding StatusText}"
+                       Foreground="#aaa"
+                       FontSize="12" />
+        </Border>
+
+        <!-- Grid is last = fill child, receives all remaining space -->
         <Grid ColumnDefinitions="*,220">
             <!-- Viewport -->
             <Border Grid.Column="0"
@@ -84,16 +96,5 @@
                 </StackPanel>
             </Border>
         </Grid>
-
-        <!-- Status bar -->
-        <Border DockPanel.Dock="Bottom"
-                Background="#1e1e30"
-                Padding="8,4"
-                BorderBrush="#333"
-                BorderThickness="0,1,0,0">
-            <TextBlock Text="{Binding StatusText}"
-                       Foreground="#aaa"
-                       FontSize="12" />
-        </Border>
     </DockPanel>
 </Window>
