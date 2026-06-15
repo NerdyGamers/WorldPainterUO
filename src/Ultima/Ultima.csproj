@@ -1,27 +1,38 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-	<PropertyGroup>
-		<TargetFramework>net8.0-windows7.0</TargetFramework>
-		<UseWindowsForms>true</UseWindowsForms>
-		<UseWPF>true</UseWPF>
-		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-		<AssemblyTitle>Ultima SDK</AssemblyTitle>
-		<AssemblyVersion>4.3.2</AssemblyVersion>
-		<FileVersion>4.3.2</FileVersion>
-		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-	</PropertyGroup>
-	<PropertyGroup>
-		<EnableNETAnalyzers>true</EnableNETAnalyzers>
-		<OutputType>Library</OutputType>
-	</PropertyGroup>
-	<PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-		<OutputPath>bin\$(Configuration)\</OutputPath>
-		<FileAlignment>4096</FileAlignment>
-		<DebugType>portable</DebugType>
-	</PropertyGroup>
-	<PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-		<OutputPath>bin\$(Configuration)\</OutputPath>
-		<FileAlignment>4096</FileAlignment>
-		<DebugType>none</DebugType>
-		<GenerateSerializationAssemblies>Off</GenerateSerializationAssemblies>
-	</PropertyGroup>
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AssemblyTitle>Ultima SDK</AssemblyTitle>
+    <AssemblyVersion>4.3.2</AssemblyVersion>
+    <FileVersion>4.3.2</FileVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <FileAlignment>4096</FileAlignment>
+    <DebugType>portable</DebugType>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'">
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <FileAlignment>4096</FileAlignment>
+    <DebugType>none</DebugType>
+    <GenerateSerializationAssemblies>Off</GenerateSerializationAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- System.Drawing.Common required for Bitmap usage in Ultima SDK on .NET 8 -->
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+  </ItemGroup>
+
 </Project>

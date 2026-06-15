@@ -1,7 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -20,6 +21,7 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.4" />
   </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\WorldPainterUO.Core\WorldPainterUO.Core.csproj" />
     <ProjectReference Include="..\WorldPainterUO.FileFormats\WorldPainterUO.FileFormats.csproj" />
@@ -27,4 +29,5 @@
     <ProjectReference Include="..\WorldPainterUO.Rendering\WorldPainterUO.Rendering.csproj" />
     <ProjectReference Include="..\WorldPainterUO.Editor\WorldPainterUO.Editor.csproj" />
   </ItemGroup>
+
 </Project>

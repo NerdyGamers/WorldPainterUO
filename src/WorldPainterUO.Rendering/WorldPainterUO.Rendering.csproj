@@ -1,19 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\WorldPainterUO.Core\WorldPainterUO.Core.csproj" />
+    <ProjectReference Include="..\Ultima\Ultima.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="SkiaSharp" Version="3.116.1" />
-    <!-- Ultima SDK referenced here so RadarColorPalette can call Ultima.RadarCol -->
-    <PackageReference Include="Ultima" Version="5.0.8.3" />
   </ItemGroup>
 
 </Project>
