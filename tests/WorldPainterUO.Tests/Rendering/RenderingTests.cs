@@ -186,7 +186,8 @@ public sealed class RenderingTests
 
     // ── MinimapRenderer ──────────────────────────────────────────────────
 
-    [Fact]
+    // Requires native SkiaSharp runtime — run locally only.
+    [Fact, Trait("Category", "Rendering")]
     public void MinimapRenderer_GetOrRender_ReturnsBitmap()
     {
         var map = WorldMap.Create(64, 64, "Felucca", SourceFileType.Mul);
@@ -198,7 +199,8 @@ public sealed class RenderingTests
         Assert.True(bmp.Height > 0);
     }
 
-    [Fact]
+    // Requires native SkiaSharp runtime — run locally only.
+    [Fact, Trait("Category", "Rendering")]
     public void MinimapRenderer_Invalidate_TriggersNewBitmap()
     {
         var map = WorldMap.Create(64, 64, "Felucca", SourceFileType.Mul);
@@ -213,7 +215,8 @@ public sealed class RenderingTests
         Assert.NotSame(bmp1, bmp2);
     }
 
-    [Fact]
+    // Requires native SkiaSharp runtime — run locally only.
+    [Fact, Trait("Category", "Rendering")]
     public void MinimapRenderer_GetOrRender_CachesUntilInvalidate()
     {
         var map = WorldMap.Create(64, 64, "Felucca", SourceFileType.Mul);
