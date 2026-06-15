@@ -6,37 +6,41 @@ using WorldPainterUO.Core;
 namespace WorldPainterUO.FileFormats;
 
 /// <summary>
-/// Reads Ultima Online map0..5.mul files into a <see cref="WorldMap"/>.
+/// Reads Ultima Online map0..5.mul / mapXLegacyMUL.uop files into a <see cref="WorldMap"/>.
 /// Each map is stored as a series of 8×8 tile blocks (196 bytes each).
 /// Block layout: 4-byte header + 64 × (ushort tileId, sbyte z) = 4 + 192 = 196 bytes.
 /// </summary>
 public sealed class UltimaMapReader
 {
-    // Compute file size as: (width / 8) * (height / 8) * 196L
-    // This avoids integer overflow and mid-expression truncation that occurred
-    // when the expression was written as width * height / 64 * 196L.
-    private static long MapFileSize(int width, int height)
-        => (long)(width / 8) * (height / 8) * 196L;
-
-    // Known UO map dimensions keyed by file size (bytes).
-    // Used by DetectDimensions to identify which facet a file belongs to.
-    private static readonly Dictionary<long, (int Width, int Height, string Facet)> KnownSizes = new()
+    // Map index → (Width, Height, Facet)
+    // Malas (map3) and TerMur (map5) have IDENTICAL file sizes (1280×4096 vs 2560×2048
+    // both yield 81,920 blocks × 196 bytes = 16,056,320 bytes), so size-based detection
+    // is ambiguous for those two.  We therefore key on map index extracted from the filename.
+    private static readonly Dictionary<int, (int Width, int Height, string Facet)> KnownByIndex = new()
     {
-        // map0/map1 Felucca/Trammel: 6144×4096  → 768 × 512 blocks
-        { MapFileSize(6144, 4096), (6144, 4096, "Felucca") },
-        // map2 Ilshenar: 2304×1600              → 288 × 200 blocks
-        { MapFileSize(2304, 1600), (2304, 1600, "Ilshenar") },
-        // map3 Malas: 2560×2048                 → 320 × 256 blocks
-        { MapFileSize(2560, 2048), (2560, 2048, "Malas") },
-        // map4 Tokuno: 1448×1448  — snapped to nearest block boundary (181×181 blocks)
-        { MapFileSize(1448, 1448), (1448, 1448, "Tokuno") },
-        // map5 TerMur: 1280×4096                → 160 × 512 blocks
-        { MapFileSize(1280, 4096), (1280, 4096, "TerMur") },
+        { 0, (6144, 4096, "Felucca")  },   // map0.mul / map0LegacyMUL.uop
+        { 1, (6144, 4096, "Trammel")  },   // map1.mul / map1LegacyMUL.uop
+        { 2, (2304, 1600, "Ilshenar") },   // map2.mul
+        { 3, (2560, 2048, "Malas")    },   // map3.mul
+        { 4, (1448, 1448, "Tokuno")   },   // map4.mul
+        { 5, (1280, 4096, "TerMur")   },   // map5.mul
     };
 
+    // Fallback: unique file sizes for maps that don’t collide.
+    // Malas and TerMur are intentionally absent — use filename detection instead.
+    private static readonly Dictionary<long, (int Width, int Height, string Facet)> KnownBySize = new()
+    {
+        { FileSize(6144, 4096), (6144, 4096, "Felucca")  },
+        { FileSize(2304, 1600), (2304, 1600, "Ilshenar") },
+        { FileSize(1448, 1448), (1448, 1448, "Tokuno")   },
+    };
+
+    private static long FileSize(int width, int height)
+        => (long)(width / 8) * (height / 8) * 196L;
+
     /// <summary>
-    /// Attempts to identify map dimensions and facet name from file size.
-    /// Falls back to a square estimate when size is unrecognised.
+    /// Attempts to identify map dimensions and facet name.
+    /// Detection order: (1) map index from filename, (2) unique file size, (3) square estimate.
     /// </summary>
     public static MapDimensions DetectDimensions(string filePath)
     {
@@ -44,13 +48,22 @@ public sealed class UltimaMapReader
         if (!info.Exists)
             throw new FileNotFoundException("Map file not found.", filePath);
 
-        if (KnownSizes.TryGetValue(info.Length, out var known))
-            return new MapDimensions(known.Width, known.Height, known.Facet);
+        // 1. Try filename: match "map0", "map1" … "map5" anywhere in the base name.
+        var baseName = Path.GetFileNameWithoutExtension(filePath).ToLowerInvariant();
+        for (var i = 0; i <= 5; i++)
+        {
+            if (baseName.Contains($"map{i}") && KnownByIndex.TryGetValue(i, out var byIdx))
+                return new MapDimensions(byIdx.Width, byIdx.Height, byIdx.Facet);
+        }
 
-        // Unknown size — estimate square from block count
+        // 2. Fall back to file size for non-ambiguous cases.
+        if (KnownBySize.TryGetValue(info.Length, out var bySize))
+            return new MapDimensions(bySize.Width, bySize.Height, bySize.Facet);
+
+        // 3. Unknown — estimate square from block count.
         var blockCount = info.Length / 196;
         var side = (int)Math.Sqrt(blockCount * 64);
-        side = (side / 8) * 8; // snap to block boundary
+        side = (side / 8) * 8;
         return new MapDimensions(side, side, "Unknown");
     }
 
@@ -69,8 +82,7 @@ public sealed class UltimaMapReader
         for (var by = 0; by < blocksY; by++)
         for (var bx = 0; bx < blocksX; bx++)
         {
-            // 4-byte block header (unused)
-            br.ReadUInt32();
+            br.ReadUInt32(); // 4-byte block header (unused)
 
             for (var ty = 0; ty < 8; ty++)
             for (var tx = 0; tx < 8; tx++)
@@ -78,11 +90,8 @@ public sealed class UltimaMapReader
                 var tileId = br.ReadUInt16();
                 var z      = br.ReadSByte();
 
-                var worldX = bx * 8 + tx;
-                var worldY = by * 8 + ty;
-
-                map.Terrain[worldX, worldY] = tileId;
-                map.Height [worldX, worldY] = z;
+                map.Terrain[bx * 8 + tx, by * 8 + ty] = tileId;
+                map.Height [bx * 8 + tx, by * 8 + ty] = z;
             }
         }
 
