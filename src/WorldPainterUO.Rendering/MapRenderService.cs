@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using SkiaSharp;
 using WorldPainterUO.Core;
 
@@ -10,13 +9,14 @@ namespace WorldPainterUO.Rendering;
 public sealed class MapRenderService
 {
     private readonly RadarColorPalette _palette = new();
-    private FallbackTileTextureProvider _fallback;
+    private readonly FallbackTileTextureProvider _fallback;
     private readonly Dictionary<(int cx, int cy), SKBitmap> _chunkCache = new();
     private readonly HashSet<(int cx, int cy)> _dirtyChunks = new();
 
     private const int ChunkSize = 32;
 
-    // Reusable sampling options — replaces obsolete SKPaint.FilterQuality
+    // SKSamplingOptions replaces the obsolete SKPaint.FilterQuality API.
+    // DrawImage (not DrawBitmap) accepts these directly.
     private static readonly SKSamplingOptions NearestSampling =
         new(SKFilterMode.Nearest, SKMipmapMode.None);
 
@@ -35,10 +35,10 @@ public sealed class MapRenderService
     public bool ShowTileGrid { get; set; }
     public bool ShowChunkGrid { get; set; }
 
-    /// <summary>Whether the Terrain layer is visible (controlled by layer panel).</summary>
+    /// <summary>Whether the Terrain layer is visible.</summary>
     public bool TerrainVisible { get; set; } = true;
 
-    /// <summary>Whether the Height shading overlay is visible (controlled by layer panel).</summary>
+    /// <summary>Whether the Height shading overlay is visible.</summary>
     public bool HeightVisible { get; set; } = true;
 
     /// <summary>Loads radar colors from the given UO data folder.</summary>
@@ -71,14 +71,14 @@ public sealed class MapRenderService
     {
         canvas.Clear(new SKColor(20, 20, 30));
 
-        var dims = map.Dimensions;
+        var dims     = map.Dimensions;
         var tileSize = Zoom;
 
         // Visible tile range
         var startX = Math.Max(0, (int)(-OffsetX));
         var startY = Math.Max(0, (int)(-OffsetY));
-        var endX = Math.Min(dims.Width,  startX + (int)(viewW / tileSize) + 2);
-        var endY = Math.Min(dims.Height, startY + (int)(viewH / tileSize) + 2);
+        var endX   = Math.Min(dims.Width,  startX + (int)(viewW / tileSize) + 2);
+        var endY   = Math.Min(dims.Height, startY + (int)(viewH / tileSize) + 2);
 
         // Evict dirty chunks from cache
         foreach (var key in _dirtyChunks)
@@ -91,11 +91,12 @@ public sealed class MapRenderService
         }
         _dirtyChunks.Clear();
 
-        // Render visible chunk columns
         var chunkStartX = startX / ChunkSize;
         var chunkStartY = startY / ChunkSize;
         var chunkEndX   = (endX + ChunkSize - 1) / ChunkSize;
         var chunkEndY   = (endY + ChunkSize - 1) / ChunkSize;
+
+        var sampling = tileSize < 1f ? LinearSampling : NearestSampling;
 
         for (var cy = chunkStartY; cy < chunkEndY; cy++)
         for (var cx = chunkStartX; cx < chunkEndX; cx++)
@@ -103,18 +104,18 @@ public sealed class MapRenderService
             var bmp = GetOrBuildChunk(map, cx, cy);
             if (bmp is null) continue;
 
-            var screenX = (cx * ChunkSize + OffsetX) * tileSize;
-            var screenY = (cy * ChunkSize + OffsetY) * tileSize;
+            var screenX  = (cx * ChunkSize + OffsetX) * tileSize;
+            var screenY  = (cy * ChunkSize + OffsetY) * tileSize;
             var destRect = new SKRect(screenX, screenY,
                 screenX + ChunkSize * tileSize,
                 screenY + ChunkSize * tileSize);
 
-            // Use SKSamplingOptions instead of obsolete FilterQuality
-            var sampling = tileSize < 1f ? LinearSampling : NearestSampling;
-            canvas.DrawBitmap(bmp, destRect, sampling);
+            // DrawImage accepts (SKImage, SKRect, SKSamplingOptions) — correct overload.
+            using var image = SKImage.FromBitmap(bmp);
+            canvas.DrawImage(image, destRect, sampling);
         }
 
-        if (ShowTileGrid) DrawTileGrid(canvas, startX, startY, endX, endY, tileSize);
+        if (ShowTileGrid)  DrawTileGrid(canvas, startX, startY, endX, endY, tileSize);
         if (ShowChunkGrid) DrawChunkGrid(canvas, chunkStartX, chunkStartY, chunkEndX, chunkEndY, tileSize);
     }
 
@@ -125,7 +126,7 @@ public sealed class MapRenderService
         if (_chunkCache.TryGetValue((cx, cy), out var cached))
             return cached;
 
-        var dims = map.Dimensions;
+        var dims       = map.Dimensions;
         var tileStartX = cx * ChunkSize;
         var tileStartY = cy * ChunkSize;
         if (tileStartX >= dims.Width || tileStartY >= dims.Height) return null;
@@ -157,9 +158,9 @@ public sealed class MapRenderService
     {
         using var paint = new SKPaint
         {
-            Color = new SKColor(255, 255, 255, 18),
+            Color       = new SKColor(255, 255, 255, 18),
             StrokeWidth = 0.5f,
-            Style = SKPaintStyle.Stroke,
+            Style       = SKPaintStyle.Stroke,
         };
         for (var x = startX; x <= endX; x++)
             canvas.DrawLine(x * tileSize, startY * tileSize, x * tileSize, endY * tileSize, paint);
@@ -172,9 +173,9 @@ public sealed class MapRenderService
     {
         using var paint = new SKPaint
         {
-            Color = new SKColor(255, 220, 80, 40),
+            Color       = new SKColor(255, 220, 80, 40),
             StrokeWidth = 1f,
-            Style = SKPaintStyle.Stroke,
+            Style       = SKPaintStyle.Stroke,
         };
         var pxSize = ChunkSize * tileSize;
         for (var cx = cStartX; cx <= cEndX; cx++)
