@@ -3,22 +3,20 @@ using System.Collections.Generic;
 using System.IO;
 using WorldPainterUO.Core;
 
-// 'using Ultima' is intentionally omitted.
-// Inside namespace WorldPainterUO.FileFormats, the compiler resolves
-// 'Ultima.X' as 'WorldPainterUO.FileFormats.Ultima.X' (which doesn't exist).
-// Use global::Ultima.* to root all SDK lookups at the global namespace.
+// 'using Ultima' is intentionally omitted — all SDK access goes through
+// UltimaSDKBridge to avoid the WorldPainterUO.FileFormats.Ultima.* namespace
+// collision. See UltimaSDKBridge.cs for details.
 
 namespace WorldPainterUO.FileFormats;
 
 /// <summary>
 /// Reads Ultima Online map files into a <see cref="WorldMap"/> using the
-/// Ultima SDK (Ultima.dll). All block layout, column-major ordering, and
-/// UOP unpacking is handled by the SDK — we simply walk the tile array it
-/// exposes and copy values into our internal model.
+/// Ultima SDK via <see cref="UltimaSDKBridge"/>. Block layout, column-major
+/// ordering, and UOP unpacking are all handled by the SDK automatically.
 /// </summary>
 public sealed class UltimaMapReader
 {
-    // Map index → (Width, Height, Facet)
+    // Map index -> (Width, Height, Facet)
     private static readonly Dictionary<int, (int Width, int Height, string Facet)> KnownByIndex = new()
     {
         { 0, (6144, 4096, "Felucca")  },
@@ -39,23 +37,26 @@ public sealed class UltimaMapReader
     private static long FileSize(int width, int height)
         => (long)(width / 8) * (height / 8) * 196L;
 
-    /// <summary>Detects map dimensions from filename, then file size, then block count estimate.</summary>
+    /// <summary>
+    /// Detects map dimensions from filename, then file size, then block-count estimate.
+    /// </summary>
     public static MapDimensions DetectDimensions(string filePath)
     {
         var info = new FileInfo(filePath);
         if (!info.Exists)
             throw new FileNotFoundException("Map file not found.", filePath);
 
+        // 1. Try filename (most reliable — "map0", "map1", etc.)
         var baseName = Path.GetFileNameWithoutExtension(filePath).ToLowerInvariant();
         for (var i = 0; i <= 5; i++)
-        {
             if (baseName.Contains($"map{i}") && KnownByIndex.TryGetValue(i, out var byIdx))
                 return new MapDimensions(byIdx.Width, byIdx.Height, byIdx.Facet);
-        }
 
+        // 2. Try file size (only works for the three facets with unique sizes)
         if (KnownBySize.TryGetValue(info.Length, out var bySize))
             return new MapDimensions(bySize.Width, bySize.Height, bySize.Facet);
 
+        // 3. Square estimate for unknown custom maps
         var blockCount = info.Length / 196;
         var side = (int)Math.Sqrt(blockCount * 64);
         side = (side / 8) * 8;
@@ -63,32 +64,25 @@ public sealed class UltimaMapReader
     }
 
     /// <summary>
-    /// Reads a map file using the Ultima SDK and returns a populated <see cref="WorldMap"/>.
-    /// Works for both .mul and .uop files — the SDK handles both transparently.
+    /// Reads a map file using the Ultima SDK (via <see cref="UltimaSDKBridge"/>)
+    /// and returns a populated <see cref="WorldMap"/>.
+    /// Works for both .mul and .uop files transparently.
     /// </summary>
     public WorldMap Read(string filePath, MapDimensions dims)
     {
         var dataDir = Path.GetDirectoryName(filePath) ?? string.Empty;
 
-        // Point the Ultima SDK at the folder containing the map file.
-        global::Ultima.Files.SetMulPath(dataDir);
+        // Initialize the bridge (safe to call multiple times — no-op if same path)
+        UltimaSDKBridge.Initialize(dataDir);
 
         var mapIndex = FacetToMapIndex(dims.Facet, filePath);
 
-        // Map(int fileIndex, int mapId, int width, int height) — 4 args.
-        // For standard facets fileIndex == mapId; both use mapIndex.
-        var sdkMap = new global::Ultima.Map(mapIndex, mapIndex, dims.Width, dims.Height);
-
         var worldMap = WorldMap.Create(dims.Width, dims.Height, dims.Facet, SourceFileType.Mul);
 
-        for (var x = 0; x < dims.Width; x++)
-        for (var y = 0; y < dims.Height; y++)
-        {
-            // GetLandTile returns Ultima.Tile; the property is .Id (not .ID)
-            var tile = sdkMap.Tiles.GetLandTile(x, y);
-            worldMap.Terrain[x, y] = (ushort)tile.Id;
-            worldMap.Height [x, y] = (sbyte)tile.Z;
-        }
+        // Delegate all tile reading to the bridge — it uses the SDK's pre-built
+        // static Map instances (Felucca, Trammel, etc.) which handle block ordering
+        // and UOP decompression automatically.
+        UltimaSDKBridge.ReadMapTiles(mapIndex, worldMap);
 
         return worldMap;
     }
@@ -97,7 +91,8 @@ public sealed class UltimaMapReader
     {
         var baseName = Path.GetFileNameWithoutExtension(filePath).ToLowerInvariant();
         for (var i = 0; i <= 5; i++)
-            if (baseName.Contains($"map{i}")) return i;
+            if (baseName.Contains($"map{i}"))
+                return i;
 
         return facet.ToLowerInvariant() switch
         {
