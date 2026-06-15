@@ -1,0 +1,88 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="WorldPainterUO.App.Views.SettingsDialog"
+        Title="Settings"
+        Width="520"
+        Height="320"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="#2d2d3f"
+        Foreground="#ccc">
+
+    <DockPanel Margin="20">
+
+        <!-- Buttons -->
+        <StackPanel DockPanel.Dock="Bottom"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="8"
+                    Margin="0,16,0,0">
+            <Button x:Name="OkButton"
+                    Content="OK"
+                    Width="90"
+                    Click="OnOk"
+                    Background="#4a7c59"
+                    Foreground="White"
+                    CornerRadius="4" />
+            <Button x:Name="CancelButton"
+                    Content="Cancel"
+                    Width="90"
+                    Click="OnCancel"
+                    Background="#555"
+                    Foreground="White"
+                    CornerRadius="4" />
+        </StackPanel>
+
+        <!-- Content -->
+        <StackPanel Spacing="16">
+
+            <!-- UO Data Path -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="UO Data Path"
+                           FontWeight="SemiBold"
+                           Foreground="#ddd" />
+                <TextBlock Text="The folder containing radarcol.mul, tiledata.mul, art.mul, etc."
+                           FontSize="11"
+                           Foreground="#888"
+                           TextWrapping="Wrap" />
+                <Grid ColumnDefinitions="*,8,Auto">
+                    <TextBox x:Name="UoDataPathBox"
+                             Grid.Column="0"
+                             Watermark="e.g. C:\Program Files (x86)\Electronic Arts\Ultima Online"
+                             Background="#1e1e30"
+                             Foreground="#ccc"
+                             BorderBrush="#555"
+                             CornerRadius="4" />
+                    <Button Grid.Column="2"
+                            Content="Browse…"
+                            Click="OnBrowse"
+                            Background="#444"
+                            Foreground="#ccc"
+                            CornerRadius="4"
+                            Padding="12,6" />
+                </Grid>
+                <TextBlock x:Name="PathStatusText"
+                           FontSize="11"
+                           Foreground="#f0a050"
+                           TextWrapping="Wrap"
+                           IsVisible="False" />
+            </StackPanel>
+
+            <!-- Theme -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="Theme"
+                           FontWeight="SemiBold"
+                           Foreground="#ddd" />
+                <ComboBox x:Name="ThemeBox"
+                          Background="#1e1e30"
+                          Foreground="#ccc"
+                          BorderBrush="#555"
+                          MinWidth="160">
+                    <ComboBoxItem Content="Dark" />
+                    <ComboBoxItem Content="Light" />
+                </ComboBox>
+            </StackPanel>
+
+        </StackPanel>
+    </DockPanel>
+</Window>

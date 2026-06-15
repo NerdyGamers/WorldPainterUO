@@ -23,7 +23,9 @@
                     </MenuItem.ItemTemplate>
                 </MenuItem>
                 <Separator />
-                <MenuItem Header="E_xit" />
+                <MenuItem Header="_Settings..." Click="OnOpenSettings" />
+                <Separator />
+                <MenuItem Header="E_xit" Click="OnExit" />
             </MenuItem>
             <MenuItem Header="_View">
                 <MenuItem Header="Zoom _In" Command="{Binding ZoomInCommand}" InputGesture="Ctrl+OemPlus" />

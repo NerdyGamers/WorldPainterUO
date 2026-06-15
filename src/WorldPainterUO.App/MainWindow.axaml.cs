@@ -45,7 +45,25 @@ public partial class MainWindow : Window
             }
         };
 
-        Loaded += (_, _) => _needsRender = true;
+        Loaded += async (_, _) =>
+        {
+            _needsRender = true;
+
+            // First-run: prompt for UO data path if not yet configured
+            var prefs = AppPreferences.Load();
+            if (string.IsNullOrWhiteSpace(prefs.UoDataPath))
+            {
+                await MessageBox.ShowDialog(
+                    this,
+                    "Welcome to WorldPainterUO!\n\n" +
+                    "To display correct terrain colors, please set your UO data folder " +
+                    "(the directory containing radarcol.mul, tiledata.mul, etc.).\n\n" +
+                    "This will open the Settings dialog now.",
+                    "Set UO Data Path");
+
+                await OpenSettingsAsync();
+            }
+        };
 
         var timer = new DispatcherTimer(
             TimeSpan.FromMilliseconds(50),
@@ -62,6 +80,26 @@ public partial class MainWindow : Window
     }
 
     public MainWindowViewModel ViewModel { get; }
+
+    private async void OnOpenSettings(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        await OpenSettingsAsync();
+    }
+
+    private async System.Threading.Tasks.Task OpenSettingsAsync()
+    {
+        var result = await SettingsDialog.ShowDialog(this);
+        if (result is not null)
+        {
+            ViewModel.ApplyUoDataPath(result.UoDataPath);
+            _needsRender = true;
+        }
+    }
+
+    private void OnExit(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        Close();
+    }
 
     private async void OnRequestNewMap()
     {
@@ -153,13 +191,11 @@ public partial class MainWindow : Window
 
         try
         {
-            // Sync view params
             var renderService = ViewModel.RenderService;
             renderService.OffsetX = (float)ViewModel.OffsetX;
             renderService.OffsetY = (float)ViewModel.OffsetY;
             renderService.Zoom = (float)ViewModel.Zoom;
 
-            // Sync dirty chunks from map edits
             renderService.SyncDirtyChunks(ViewModel.Map);
 
             using var bitmap = new SKBitmap(w, h);
