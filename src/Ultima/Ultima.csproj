@@ -9,7 +9,11 @@
     <FileVersion>4.3.2</FileVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+    <!-- Disable nullable analysis for this vendored legacy library.
+         The source predates nullable reference types and generates 300+
+         CS86xx warnings that are noise, not bugs. -->
+    <Nullable>disable</Nullable>
+    <NoWarn>CS0618;CS0108;CS0109;CS0114;CS0672;CS1591</NoWarn>
     <OutputType>Library</OutputType>
   </PropertyGroup>
 
@@ -17,21 +21,11 @@
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">
-    <OutputPath>bin\$(Configuration)\</OutputPath>
-    <FileAlignment>4096</FileAlignment>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <DebugType>portable</DebugType>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'">
-    <OutputPath>bin\$(Configuration)\</OutputPath>
-    <FileAlignment>4096</FileAlignment>
-    <DebugType>none</DebugType>
-    <GenerateSerializationAssemblies>Off</GenerateSerializationAssemblies>
-  </PropertyGroup>
-
   <ItemGroup>
-    <!-- System.Drawing.Common required for Bitmap usage in Ultima SDK on .NET 8 -->
     <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
   </ItemGroup>
 
