@@ -47,7 +47,7 @@ public partial class MainWindow : Window
 
         Loaded += (_, _) => _needsRender = true;
 
-            var timer = new DispatcherTimer(
+        var timer = new DispatcherTimer(
             TimeSpan.FromMilliseconds(50),
             DispatcherPriority.Render,
             (_, _) =>
@@ -138,6 +138,14 @@ public partial class MainWindow : Window
 
     private void RenderViewport()
     {
+        var border = ViewportBorder;
+        var w = (int)Math.Max(border.Bounds.Width, 1);
+        var h = (int)Math.Max(border.Bounds.Height, 1);
+
+        // Guard BEFORE clearing the flag so small-bounds ticks retry on the next frame
+        if (w < 2 || h < 2)
+            return;
+
         _needsRender = false;
 
         if (ViewModel.Map is null)
@@ -145,13 +153,6 @@ public partial class MainWindow : Window
 
         try
         {
-            var border = ViewportBorder;
-            var w = (int)Math.Max(border.Bounds.Width, 1);
-            var h = (int)Math.Max(border.Bounds.Height, 1);
-
-            if (w < 2 || h < 2)
-                return;
-
             // Sync view params
             var renderService = ViewModel.RenderService;
             renderService.OffsetX = (float)ViewModel.OffsetX;
