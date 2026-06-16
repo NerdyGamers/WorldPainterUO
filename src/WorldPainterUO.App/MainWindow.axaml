@@ -13,10 +13,18 @@
         <!-- Menu bar -->
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
-                <MenuItem Header="_New Map"     Command="{Binding NewMapCommand}"    InputGesture="Ctrl+N" />
-                <MenuItem Header="_Open..."     Command="{Binding OpenMapCommand}"   InputGesture="Ctrl+O" />
-                <MenuItem Header="_Save"        Command="{Binding SaveMapCommand}"   InputGesture="Ctrl+S" />
-                <MenuItem Header="Save _As..."  Command="{Binding SaveAsMapCommand}" InputGesture="Ctrl+Shift+S" />
+                <MenuItem Header="_New Map" Command="{Binding NewMapCommand}" InputGesture="Ctrl+N">
+                    <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_new.png" Width="16" Height="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="_Open..." Command="{Binding OpenMapCommand}" InputGesture="Ctrl+O">
+                    <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_open.png" Width="16" Height="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="_Save" Command="{Binding SaveMapCommand}" InputGesture="Ctrl+S">
+                    <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_save.png" Width="16" Height="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Save _As..." Command="{Binding SaveAsMapCommand}" InputGesture="Ctrl+Shift+S">
+                    <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_saveas.png" Width="16" Height="16" /></MenuItem.Icon>
+                </MenuItem>
                 <MenuItem Header="_Recent" x:Name="RecentMenu"
                           ItemsSource="{Binding RecentFiles.Entries}">
                     <MenuItem.ItemTemplate>
@@ -26,31 +34,57 @@
                     </MenuItem.ItemTemplate>
                 </MenuItem>
                 <Separator />
-                <MenuItem Header="_Export..."   Command="{Binding ExportMapCommand}" InputGesture="Ctrl+E" />
+                <MenuItem Header="_Export..." Command="{Binding ExportMapCommand}" InputGesture="Ctrl+E">
+                    <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_export.png" Width="16" Height="16" /></MenuItem.Icon>
+                </MenuItem>
                 <Separator />
-                <MenuItem Header="_Settings..." Click="OnOpenSettings" InputGesture="Ctrl+," />
+                <MenuItem Header="_Settings..." Click="OnOpenSettings" InputGesture="Ctrl+,">
+                    <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_settings.png" Width="16" Height="16" /></MenuItem.Icon>
+                </MenuItem>
                 <Separator />
-                <MenuItem Header="E_xit" Click="OnExit" />
+                <MenuItem Header="E_xit" Click="OnExit">
+                    <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_exit.png" Width="16" Height="16" /></MenuItem.Icon>
+                </MenuItem>
             </MenuItem>
 
             <MenuItem Header="_Edit">
-                <MenuItem Header="{Binding UndoLabel}" Command="{Binding UndoCommand}" InputGesture="Ctrl+Z" />
-                <MenuItem Header="{Binding RedoLabel}" Command="{Binding RedoCommand}" InputGesture="Ctrl+Y" />
+                <MenuItem Header="{Binding UndoLabel}" Command="{Binding UndoCommand}" InputGesture="Ctrl+Z">
+                    <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_undo.png" Width="16" Height="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{Binding RedoLabel}" Command="{Binding RedoCommand}" InputGesture="Ctrl+Y">
+                    <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_redo.png" Width="16" Height="16" /></MenuItem.Icon>
+                </MenuItem>
             </MenuItem>
 
             <MenuItem Header="_View">
                 <MenuItem Header="Render Mode">
-                    <MenuItem Header="_Radar View"   Click="OnSetRadarMode"   IsChecked="{Binding IsRadarMode}" />
-                    <MenuItem Header="_Terrain View" Click="OnSetTerrainMode" IsChecked="{Binding IsTerrainMode}" />
-                    <MenuItem Header="_Hybrid View"  Click="OnSetHybridMode"  IsChecked="{Binding IsHybridMode}" />
+                    <MenuItem Header="_Radar View"   Click="OnSetRadarMode"   IsChecked="{Binding IsRadarMode}">
+                        <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_radar.png" Width="16" Height="16" /></MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Header="_Terrain View" Click="OnSetTerrainMode" IsChecked="{Binding IsTerrainMode}">
+                        <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_terrain.png" Width="16" Height="16" /></MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Header="_Hybrid View"  Click="OnSetHybridMode"  IsChecked="{Binding IsHybridMode}">
+                        <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_hybrid.png" Width="16" Height="16" /></MenuItem.Icon>
+                    </MenuItem>
                 </MenuItem>
                 <Separator />
-                <MenuItem Header="Show _Tile Grid"  IsChecked="{Binding ShowTileGrid}"  Click="OnToggleTileGrid"  InputGesture="Ctrl+G" />
-                <MenuItem Header="Show _Chunk Grid" IsChecked="{Binding ShowChunkGrid}" Click="OnToggleChunkGrid" InputGesture="Ctrl+Shift+G" />
+                <MenuItem Header="Show _Tile Grid"  IsChecked="{Binding ShowTileGrid}"  Click="OnToggleTileGrid"  InputGesture="Ctrl+G">
+                    <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_grid.png" Width="16" Height="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Show _Chunk Grid" IsChecked="{Binding ShowChunkGrid}" Click="OnToggleChunkGrid" InputGesture="Ctrl+Shift+G">
+                    <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_grid.png" Width="16" Height="16" /></MenuItem.Icon>
+                </MenuItem>
                 <Separator />
-                <MenuItem Header="Zoom _In"    Command="{Binding ZoomInCommand}"    InputGesture="Ctrl+OemPlus" />
-                <MenuItem Header="Zoom _Out"   Command="{Binding ZoomOutCommand}"   InputGesture="Ctrl+OemMinus" />
-                <MenuItem Header="_Reset Zoom" Command="{Binding ResetZoomCommand}" InputGesture="Ctrl+D0" />
+                <MenuItem Header="Zoom _In"  Command="{Binding ZoomInCommand}"  InputGesture="Ctrl+OemPlus">
+                    <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_zoomin.png" Width="16" Height="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Zoom _Out" Command="{Binding ZoomOutCommand}" InputGesture="Ctrl+OemMinus">
+                    <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_zoomout.png" Width="16" Height="16" /></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="_Reset Zoom" Command="{Binding ResetZoomCommand}" InputGesture="Ctrl+D0">
+                    <MenuItem.Icon><Image Source="avares://WorldPainterUO.App/Assets/Icons/menu_resetzoom.png" Width="16" Height="16" /></MenuItem.Icon>
+                </MenuItem>
             </MenuItem>
         </Menu>
 
@@ -72,16 +106,31 @@
                         <Setter Property="FontSize" Value="10" />
                     </Style>
                 </StackPanel.Styles>
+                <Image Source="avares://WorldPainterUO.App/Assets/Icons/status_tool.png"
+                       Width="12" Height="12" VerticalAlignment="Center"
+                       IsVisible="{Binding IsMapLoaded}" />
                 <TextBlock FontWeight="Bold" Foreground="#eee"
                            Text="{Binding Tools.ToolName}"
                            IsVisible="{Binding IsMapLoaded}" />
                 <TextBlock Text="|" Foreground="#444" IsVisible="{Binding IsMapLoaded}" />
+                <Image Source="avares://WorldPainterUO.App/Assets/Icons/status_coords.png"
+                       Width="12" Height="12" VerticalAlignment="Center"
+                       IsVisible="{Binding IsMapLoaded}" />
                 <TextBlock Text="{Binding TileX, StringFormat='X: {0}'}" IsVisible="{Binding IsMapLoaded}" />
                 <TextBlock Text="{Binding TileY, StringFormat='Y: {0}'}" IsVisible="{Binding IsMapLoaded}" />
                 <TextBlock Text="|" Foreground="#444" IsVisible="{Binding IsMapLoaded}" />
+                <Image Source="avares://WorldPainterUO.App/Assets/Icons/status_tileid.png"
+                       Width="12" Height="12" VerticalAlignment="Center"
+                       IsVisible="{Binding IsMapLoaded}" />
                 <TextBlock Text="{Binding TileId, StringFormat='ID: 0x{0:X4}'}" IsVisible="{Binding IsMapLoaded}" />
+                <Image Source="avares://WorldPainterUO.App/Assets/Icons/status_height.png"
+                       Width="12" Height="12" VerticalAlignment="Center"
+                       IsVisible="{Binding IsMapLoaded}" />
                 <TextBlock Text="{Binding TileZ, StringFormat='Z: {0}'}" IsVisible="{Binding IsMapLoaded}" />
                 <TextBlock Text="|" Foreground="#444" IsVisible="{Binding IsMapLoaded}" />
+                <Image Source="avares://WorldPainterUO.App/Assets/Icons/status_zoom.png"
+                       Width="12" Height="12" VerticalAlignment="Center"
+                       IsVisible="{Binding IsMapLoaded}" />
                 <TextBlock Text="{Binding ZoomPercent, StringFormat='Zoom: {0}'}" Foreground="#6af" IsVisible="{Binding IsMapLoaded}" />
             </StackPanel>
         </Border>
@@ -100,24 +149,27 @@
                         ToolTip.Tip="Pan (V)"
                         Click="OnSelectPan"
                         Background="{Binding Tools.IsPanActive, Converter={StaticResource BoolToActiveButtonConverter}}"
-                        Padding="4">
-                    <TextBlock Text="Pan" FontSize="9" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#ccc" />
+                        Padding="2">
+                    <Image Source="avares://WorldPainterUO.App/Assets/Icons/icon_pan.png"
+                           Width="32" Height="32" Stretch="Uniform" />
                 </Button>
                 <!-- Paint Brush -->
                 <Button Width="36" Height="36"
                         ToolTip.Tip="Paint Brush (B)"
                         Click="OnSelectPaint"
                         Background="{Binding Tools.IsPaintActive, Converter={StaticResource BoolToActiveButtonConverter}}"
-                        Padding="4">
-                    <TextBlock Text="&#x1F58C;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        Padding="2">
+                    <Image Source="avares://WorldPainterUO.App/Assets/Icons/icon_paintbrush.png"
+                           Width="32" Height="32" Stretch="Uniform" />
                 </Button>
                 <!-- Fill -->
                 <Button Width="36" Height="36"
                         ToolTip.Tip="Fill (F)"
                         Click="OnSelectFill"
                         Background="{Binding Tools.IsFillActive, Converter={StaticResource BoolToActiveButtonConverter}}"
-                        Padding="4">
-                    <TextBlock Text="&#x25A0;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        Padding="2">
+                    <Image Source="avares://WorldPainterUO.App/Assets/Icons/icon_fill.png"
+                           Width="32" Height="32" Stretch="Uniform" />
                 </Button>
                 <Separator Height="1" Background="#444" Margin="2,4" />
                 <!-- Raise -->
@@ -125,40 +177,45 @@
                         ToolTip.Tip="Raise Height (R)"
                         Click="OnSelectRaise"
                         Background="{Binding Tools.IsRaiseActive, Converter={StaticResource BoolToActiveButtonConverter}}"
-                        Padding="4">
-                    <TextBlock Text="&#x25B2;" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        Padding="2">
+                    <Image Source="avares://WorldPainterUO.App/Assets/Icons/icon_raise.png"
+                           Width="32" Height="32" Stretch="Uniform" />
                 </Button>
                 <!-- Lower -->
                 <Button Width="36" Height="36"
                         ToolTip.Tip="Lower Height (L)"
                         Click="OnSelectLower"
                         Background="{Binding Tools.IsLowerActive, Converter={StaticResource BoolToActiveButtonConverter}}"
-                        Padding="4">
-                    <TextBlock Text="&#x25BC;" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        Padding="2">
+                    <Image Source="avares://WorldPainterUO.App/Assets/Icons/icon_lower.png"
+                           Width="32" Height="32" Stretch="Uniform" />
                 </Button>
                 <!-- Smooth -->
                 <Button Width="36" Height="36"
                         ToolTip.Tip="Smooth Height (S)"
                         Click="OnSelectSmooth"
                         Background="{Binding Tools.IsSmoothActive, Converter={StaticResource BoolToActiveButtonConverter}}"
-                        Padding="4">
-                    <TextBlock Text="&#x223C;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        Padding="2">
+                    <Image Source="avares://WorldPainterUO.App/Assets/Icons/icon_smooth.png"
+                           Width="32" Height="32" Stretch="Uniform" />
                 </Button>
                 <!-- Flatten -->
                 <Button Width="36" Height="36"
                         ToolTip.Tip="Flatten Height (G)"
                         Click="OnSelectFlatten"
                         Background="{Binding Tools.IsFlattenActive, Converter={StaticResource BoolToActiveButtonConverter}}"
-                        Padding="4">
-                    <TextBlock Text="&#x2015;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        Padding="2">
+                    <Image Source="avares://WorldPainterUO.App/Assets/Icons/icon_flatten.png"
+                           Width="32" Height="32" Stretch="Uniform" />
                 </Button>
                 <!-- Noise -->
                 <Button Width="36" Height="36"
                         ToolTip.Tip="Noise (N)"
                         Click="OnSelectNoise"
                         Background="{Binding Tools.IsNoiseActive, Converter={StaticResource BoolToActiveButtonConverter}}"
-                        Padding="4">
-                    <TextBlock Text="&#x2248;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        Padding="2">
+                    <Image Source="avares://WorldPainterUO.App/Assets/Icons/icon_noise.png"
+                           Width="32" Height="32" Stretch="Uniform" />
                 </Button>
                 <Separator Height="1" Background="#444" Margin="2,4" />
                 <!-- Replace -->
@@ -166,8 +223,9 @@
                         ToolTip.Tip="Replace Terrain"
                         Click="OnSelectReplace"
                         Background="{Binding Tools.IsReplaceActive, Converter={StaticResource BoolToActiveButtonConverter}}"
-                        Padding="4">
-                    <TextBlock Text="&#x21C4;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        Padding="2">
+                    <Image Source="avares://WorldPainterUO.App/Assets/Icons/icon_replace.png"
+                           Width="32" Height="32" Stretch="Uniform" />
                 </Button>
                 <Separator Height="1" Background="#444" Margin="2,4" />
                 <!-- Rect Select -->
@@ -175,16 +233,18 @@
                         ToolTip.Tip="Rectangle Select (M)"
                         Click="OnSelectRect"
                         Background="{Binding Tools.IsRectActive, Converter={StaticResource BoolToActiveButtonConverter}}"
-                        Padding="4">
-                    <TextBlock Text="&#x25AD;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        Padding="2">
+                    <Image Source="avares://WorldPainterUO.App/Assets/Icons/icon_rectselect.png"
+                           Width="32" Height="32" Stretch="Uniform" />
                 </Button>
                 <!-- Lasso Select -->
                 <Button Width="36" Height="36"
                         ToolTip.Tip="Lasso Select"
                         Click="OnSelectLasso"
                         Background="{Binding Tools.IsLassoActive, Converter={StaticResource BoolToActiveButtonConverter}}"
-                        Padding="4">
-                    <TextBlock Text="&#x2B22;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        Padding="2">
+                    <Image Source="avares://WorldPainterUO.App/Assets/Icons/icon_lassoselect.png"
+                           Width="32" Height="32" Stretch="Uniform" />
                 </Button>
             </StackPanel>
         </Border>
@@ -213,7 +273,10 @@
 
                         <!-- Brush Options -->
                         <StackPanel IsVisible="{Binding Tools.ShowBrushOptions}" Spacing="6">
-                            <TextBlock Text="Brush" FontWeight="Bold" Foreground="#ccc" FontSize="12" />
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Image Source="avares://WorldPainterUO.App/Assets/Icons/section_brush.png" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="Brush" FontWeight="Bold" Foreground="#ccc" FontSize="12" VerticalAlignment="Center" />
+                            </StackPanel>
                             <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto" HorizontalAlignment="Stretch">
                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Size" Foreground="#aaa" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
                                 <Slider  Grid.Row="0" Grid.Column="1"
@@ -256,7 +319,10 @@
 
                         <!-- Zoom -->
                         <StackPanel Spacing="4">
-                            <TextBlock Text="Zoom" FontWeight="Bold" Foreground="#ccc" FontSize="12" />
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Image Source="avares://WorldPainterUO.App/Assets/Icons/section_zoom.png" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="Zoom" FontWeight="Bold" Foreground="#ccc" FontSize="12" VerticalAlignment="Center" />
+                            </StackPanel>
                             <Grid ColumnDefinitions="*,Auto">
                                 <Slider Grid.Column="0"
                                         Minimum="0.03125" Maximum="16"
@@ -283,7 +349,10 @@
 
                         <!-- Biome Palette -->
                         <StackPanel IsVisible="{Binding Tools.ShowBiomePalette}" Spacing="6">
-                            <TextBlock Text="Terrain" FontWeight="Bold" Foreground="#ccc" FontSize="12" />
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Image Source="avares://WorldPainterUO.App/Assets/Icons/section_terrain.png" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="Terrain" FontWeight="Bold" Foreground="#ccc" FontSize="12" VerticalAlignment="Center" />
+                            </StackPanel>
                             <ItemsControl ItemsSource="{Binding Tools.Biomes}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -319,7 +388,10 @@
                         <Separator Background="#444" />
 
                         <!-- Layers -->
-                        <TextBlock Text="Layers" FontWeight="Bold" Foreground="#ccc" FontSize="12" />
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Image Source="avares://WorldPainterUO.App/Assets/Icons/section_layers.png" Width="16" Height="16" VerticalAlignment="Center" />
+                            <TextBlock Text="Layers" FontWeight="Bold" Foreground="#ccc" FontSize="12" VerticalAlignment="Center" />
+                        </StackPanel>
                         <ItemsControl ItemsSource="{Binding Layers}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -334,7 +406,10 @@
                         <Separator Background="#444" />
 
                         <!-- Minimap -->
-                        <TextBlock Text="Minimap" FontWeight="Bold" Foreground="#ccc" FontSize="12" />
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Image Source="avares://WorldPainterUO.App/Assets/Icons/section_minimap.png" Width="16" Height="16" VerticalAlignment="Center" />
+                            <TextBlock Text="Minimap" FontWeight="Bold" Foreground="#ccc" FontSize="12" VerticalAlignment="Center" />
+                        </StackPanel>
                         <Border Background="#1a1a2e"
                                 Width="224"
                                 Height="240"
@@ -345,7 +420,10 @@
                         <Separator Background="#444" />
 
                         <!-- Tile Info -->
-                        <TextBlock Text="Tile Info" FontWeight="Bold" Foreground="#ccc" FontSize="12" />
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Image Source="avares://WorldPainterUO.App/Assets/Icons/section_tileinfo.png" Width="16" Height="16" VerticalAlignment="Center" />
+                            <TextBlock Text="Tile Info" FontWeight="Bold" Foreground="#ccc" FontSize="12" VerticalAlignment="Center" />
+                        </StackPanel>
                         <TextBlock Text="{Binding StatusText}"
                                    Foreground="#aaa"
                                    FontSize="11"

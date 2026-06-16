@@ -30,4 +30,8 @@
     <ProjectReference Include="..\WorldPainterUO.Editor\WorldPainterUO.Editor.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\Icons\*.png" />
+  </ItemGroup>
+
 </Project>
