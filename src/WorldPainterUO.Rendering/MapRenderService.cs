@@ -8,12 +8,16 @@ namespace WorldPainterUO.Rendering;
 /// <summary>GPU-accelerated map renderer using SkiaSharp.</summary>
 public sealed class MapRenderService
 {
-    private readonly RadarColorPalette _palette = new();
-    private readonly FallbackTileTextureProvider _fallback;
-    private readonly Dictionary<(int cx, int cy), SKBitmap> _chunkCache = new();
-    private readonly HashSet<(int cx, int cy)> _dirtyChunks = new();
+    private readonly RadarColorPalette             _palette     = new();
+    private readonly FallbackTileTextureProvider   _fallback;
+    private readonly Dictionary<(int cx, int cy), SKBitmap> _chunkCache  = new();
+    private readonly HashSet<(int cx, int cy)>               _dirtyChunks = new();
 
-    private const int ChunkSize = 32;
+    // Render chunks are 32x32 tiles each (visual grouping for the bitmap cache).
+    // UO data chunks are 64x64 tiles (MapChunk.Size = 64).
+    // Each data chunk therefore covers a 2x2 block of render chunks.
+    private const int ChunkSize     = 32; // render-chunk tile width/height
+    private const int RenderPerData = 2;  // DataChunkSize(64) / ChunkSize(32)
 
     // SKSamplingOptions replaces the obsolete SKPaint.FilterQuality API.
     // DrawImage (not DrawBitmap) accepts these directly.
@@ -28,12 +32,12 @@ public sealed class MapRenderService
         _fallback = new FallbackTileTextureProvider(_palette);
     }
 
-    public float Zoom { get; set; } = 1f;
-    public float OffsetX { get; set; }
-    public float OffsetY { get; set; }
-    public ViewMode ViewMode { get; set; } = ViewMode.Radar;
-    public bool ShowTileGrid { get; set; }
-    public bool ShowChunkGrid { get; set; }
+    public float    Zoom          { get; set; } = 1f;
+    public float    OffsetX       { get; set; }
+    public float    OffsetY       { get; set; }
+    public ViewMode ViewMode      { get; set; } = ViewMode.Radar;
+    public bool     ShowTileGrid  { get; set; }
+    public bool     ShowChunkGrid { get; set; }
 
     /// <summary>Whether the Terrain layer is visible.</summary>
     public bool TerrainVisible { get; set; } = true;
@@ -44,23 +48,35 @@ public sealed class MapRenderService
     /// <summary>Loads radar colors from the given UO data folder.</summary>
     public bool TryLoadRadarColors(string? uoDataPath)
     {
-        if (string.IsNullOrWhiteSpace(uoDataPath))
-            return false;
+        if (string.IsNullOrWhiteSpace(uoDataPath)) return false;
         var loaded = _palette.TryLoad(uoDataPath);
         if (loaded) InvalidateAll();
         return loaded;
     }
 
+    /// <summary>
+    /// Converts dirty data-chunk coordinates (64-tile grid) emitted by WorldMap
+    /// into the corresponding render-chunk coordinates (32-tile grid) and queues
+    /// those render chunks for bitmap rebuild on the next Render call.
+    /// One UO data chunk (64x64) covers a 2x2 block of render chunks (32x32 each).
+    /// </summary>
     public void SyncDirtyChunks(WorldMap map)
     {
-        foreach (var key in map.ConsumeAndClearDirtyChunks())
-            _dirtyChunks.Add(key);
+        foreach (var (dcx, dcy) in map.ConsumeAndClearDirtyChunks())
+        {
+            // Translate data-chunk origin to render-chunk origin
+            var rcx = dcx * RenderPerData;
+            var rcy = dcy * RenderPerData;
+            // Invalidate every render chunk covered by this data chunk
+            for (var dy = 0; dy < RenderPerData; dy++)
+            for (var dx = 0; dx < RenderPerData; dx++)
+                _dirtyChunks.Add((rcx + dx, rcy + dy));
+        }
     }
 
     public void InvalidateAll()
     {
-        foreach (var bmp in _chunkCache.Values)
-            bmp.Dispose();
+        foreach (var bmp in _chunkCache.Values) bmp.Dispose();
         _chunkCache.Clear();
         _dirtyChunks.Clear();
     }
@@ -80,7 +96,7 @@ public sealed class MapRenderService
         var endX   = Math.Min(dims.Width,  startX + (int)(viewW / tileSize) + 2);
         var endY   = Math.Min(dims.Height, startY + (int)(viewH / tileSize) + 2);
 
-        // Evict dirty chunks from cache
+        // Evict dirty render chunks from cache before drawing
         foreach (var key in _dirtyChunks)
         {
             if (_chunkCache.TryGetValue(key, out var old))
@@ -107,28 +123,27 @@ public sealed class MapRenderService
             var screenX  = (cx * ChunkSize + OffsetX) * tileSize;
             var screenY  = (cy * ChunkSize + OffsetY) * tileSize;
             var destRect = new SKRect(screenX, screenY,
-                screenX + ChunkSize * tileSize,
-                screenY + ChunkSize * tileSize);
+                                      screenX + ChunkSize * tileSize,
+                                      screenY + ChunkSize * tileSize);
 
-            // DrawImage accepts (SKImage, SKRect, SKSamplingOptions) — correct overload.
             using var image = SKImage.FromBitmap(bmp);
             canvas.DrawImage(image, destRect, sampling);
         }
 
-        if (ShowTileGrid)  DrawTileGrid(canvas, startX, startY, endX, endY, tileSize);
+        if (ShowTileGrid)  DrawTileGrid (canvas, startX, startY, endX, endY, tileSize);
         if (ShowChunkGrid) DrawChunkGrid(canvas, chunkStartX, chunkStartY, chunkEndX, chunkEndY, tileSize);
     }
 
-    // ── Chunk building ────────────────────────────────────────────────────────
+    // ── Chunk building ──────────────────────────────────────────────────────────
 
     private SKBitmap? GetOrBuildChunk(WorldMap map, int cx, int cy)
     {
-        if (_chunkCache.TryGetValue((cx, cy), out var cached))
-            return cached;
+        if (_chunkCache.TryGetValue((cx, cy), out var cached)) return cached;
 
         var dims       = map.Dimensions;
         var tileStartX = cx * ChunkSize;
         var tileStartY = cy * ChunkSize;
+
         if (tileStartX >= dims.Width || tileStartY >= dims.Height) return null;
 
         var bmp = new SKBitmap(ChunkSize, ChunkSize, SKColorType.Rgb888x, SKAlphaType.Opaque);
@@ -142,8 +157,7 @@ public sealed class MapRenderService
             if (wx >= dims.Width || wy >= dims.Height) continue;
 
             var tileId = map.Terrain[wx, wy];
-            var z      = map.Height[wx, wy];
-
+            var z      = map.Height [wx, wy];
             _fallback.RenderFallbackTile(chunkCanvas, tx, ty, 1f, tileId, z);
         }
 
@@ -151,10 +165,9 @@ public sealed class MapRenderService
         return bmp;
     }
 
-    // ── Grid overlays ─────────────────────────────────────────────────────────
+    // ── Grid overlays ───────────────────────────────────────────────────────────
 
-    private static void DrawTileGrid(SKCanvas canvas,
-        int startX, int startY, int endX, int endY, float tileSize)
+    private static void DrawTileGrid(SKCanvas canvas, int startX, int startY, int endX, int endY, float tileSize)
     {
         using var paint = new SKPaint
         {
@@ -168,8 +181,7 @@ public sealed class MapRenderService
             canvas.DrawLine(startX * tileSize, y * tileSize, endX * tileSize, y * tileSize, paint);
     }
 
-    private static void DrawChunkGrid(SKCanvas canvas,
-        int cStartX, int cStartY, int cEndX, int cEndY, float tileSize)
+    private static void DrawChunkGrid(SKCanvas canvas, int cStartX, int cStartY, int cEndX, int cEndY, float tileSize)
     {
         using var paint = new SKPaint
         {
