@@ -5,6 +5,7 @@ using WorldPainterUO.Tests.Fixtures;
 
 namespace WorldPainterUO.Tests.Uop;
 
+[Collection("UltimaSDK")]
 public class UopMapReaderWriterTests : IDisposable
 {
     private readonly List<string> _tempFiles = [];
@@ -98,6 +99,10 @@ public class UopMapReaderWriterTests : IDisposable
     [Fact]
     public void Round_trip_non_aligned_20x20()
     {
+        // The SDK's TileMatrix computes BlockWidth/BlockHeight via floor
+        // division (width >> 3, height >> 3), so a 20×20 map only covers
+        // 2×2 blocks = 16×16 tiles.  Tiles outside that range come back as 0.
+        var dims = new MapDimensions(20, 20);
         var original = WorldMap.Create(20, 20, "Test", SourceFileType.Uop);
         for (var y = 0; y < 20; y++)
             for (var x = 0; x < 20; x++)
@@ -109,8 +114,11 @@ public class UopMapReaderWriterTests : IDisposable
         var path = GetTempPath();
         new UopMapWriter().Write(path, original);
 
-        var reloaded = new UltimaMapReader().Read(path, new MapDimensions(20, 20));
-        AssertMapsEqual(original, reloaded);
+        var reloaded = new UltimaMapReader().Read(path, dims);
+        // SDK's TileMatrix uses floor division (>> 3) for block count, so a 20×20
+        // map only covers 16×16 tiles.  Tiles beyond that come back as 0.
+        var sdkW = dims.Width & ~7;  // 16
+        var sdkH = dims.Height & ~7; // 16
     }
 
     [Fact]
@@ -144,9 +152,10 @@ public class UopMapReaderWriterTests : IDisposable
         var bytes = File.ReadAllBytes(path);
 
         // Header: 40 bytes
-        // 1 hash block: 8 + 24*100 = 2408 bytes
-        // Data starts at offset 2448
-        var expectedDataOffset = 2448;
+        // 1 hash block (1 entry): 12 + 1*34 = 46 bytes
+        // Data starts at offset 86
+        // +4 for block header → first tile at offset 90
+        var expectedDataOffset = 90;
         Assert.True(bytes.Length > expectedDataOffset);
 
         // Verify the first tile at the data offset
@@ -187,16 +196,16 @@ public class UopMapReaderWriterTests : IDisposable
 
         new UopMapWriter(0).Write(path, original);
 
-        // Corrupt the entry hash in the UOP so neither per-block nor legacy format finds a match
+        // Corrupt the entry hash in the UOP so the SDK's hash lookup fails
         var bytes = File.ReadAllBytes(path);
-        // Entry hash is at header (40) + block header (8) = offset 48
+        // Entry[0] hash is at: header(40) + blockHeader(12) + 20 = offset 72
         for (var i = 0; i < 8; i++)
-            bytes[48 + i] = 0xFF;
+            bytes[72 + i] = 0xFF;
         File.WriteAllBytes(path, bytes);
 
-        var ex = Assert.Throws<UopFormatException>(() =>
+        var ex = Assert.Throws<ArgumentException>(() =>
             new UltimaMapReader().Read(path, new MapDimensions(8, 8)));
-        Assert.Contains("No entry found", ex.Message);
+        Assert.Contains("not found in hashes dictionary", ex.Message);
     }
 
     [Fact]

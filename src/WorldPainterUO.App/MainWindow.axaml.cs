@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -13,6 +14,9 @@ using WorldPainterUO.App.ViewModels;
 using WorldPainterUO.App.Views;
 using WorldPainterUO.Core;
 using WorldPainterUO.FileFormats;
+using WorldPainterUO.FileFormats.Uop;
+using WorldPainterUO.Editor.Selection;
+using WorldPainterUO.Project;
 using WorldPainterUO.Rendering;
 
 namespace WorldPainterUO.App;
@@ -28,6 +32,11 @@ public partial class MainWindow : Window
     private int _lastPaintTileX = -1;
     private int _lastPaintTileY = -1;
 
+    // Selection state
+    private bool _isSelecting;
+    private double _selStartX, _selStartY, _selEndX, _selEndY;
+    private readonly List<(int X, int Y)> _lassoPoints = [];
+
     private bool _needsRender = true;
     private Bitmap? _prevViewport;
     private Bitmap? _prevMinimap;
@@ -38,8 +47,15 @@ public partial class MainWindow : Window
         ViewModel = new MainWindowViewModel();
         DataContext = ViewModel;
 
-        ViewModel.RequestNewMap  += OnRequestNewMap;
-        ViewModel.RequestOpenMap += OnRequestOpenMap;
+        DragDrop.SetAllowDrop(ViewportBorder, true);
+        ViewportBorder.AddHandler(DragDrop.DragEnterEvent, OnViewportDragEnter);
+        ViewportBorder.AddHandler(DragDrop.DropEvent, OnViewportDrop);
+
+        ViewModel.RequestNewMap    += OnRequestNewMap;
+        ViewModel.RequestOpenMap   += OnRequestOpenMap;
+        ViewModel.RequestSaveMap   += OnRequestSaveMap;
+        ViewModel.RequestSaveAsMap += OnRequestSaveAsMap;
+        ViewModel.RequestExportMap += OnRequestExportMap;
 
         ViewModel.PropertyChanged += (_, e) =>
         {
@@ -111,6 +127,14 @@ public partial class MainWindow : Window
             case Key.S: ViewModel.Tools.SelectSmoothCommand.Execute(null);  break;
             case Key.G: ViewModel.Tools.SelectFlattenCommand.Execute(null); break;
             case Key.N: ViewModel.Tools.SelectNoiseCommand.Execute(null);   break;
+            case Key.E: ViewModel.Tools.SelectReplaceCommand.Execute(null); break;
+            case Key.M: ViewModel.Tools.SelectRectCommand.Execute(null);    break;
+            case Key.O: ViewModel.Tools.SelectLassoCommand.Execute(null);   break;
+            case Key.Escape:
+                ViewModel.ActiveSelection = null;
+                _lassoPoints.Clear();
+                _needsRender = true;
+                break;
         }
     }
 
@@ -127,6 +151,26 @@ public partial class MainWindow : Window
             ViewModel.ApplyPreferences(result);
             _needsRender = true;
         }
+    }
+
+    private async void OnWindowClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (!ViewModel.IsDirty) return;
+        e.Cancel = true;
+        var result = await MessageBox.ShowDialog(this,
+            "Save changes before closing?", "Unsaved Changes",
+            MessageBoxButtons.YesNoCancel);
+        if (result == MessageBoxResult.Yes)
+        {
+            ViewModel.SaveMapCommand.Execute(null);
+            if (!ViewModel.IsDirty) Close();
+        }
+        else if (result == MessageBoxResult.No)
+        {
+            ViewModel.IsDirty = false;
+            Close();
+        }
+        // Cancel — do nothing
     }
 
     private void OnExit(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => Close();
@@ -160,6 +204,12 @@ public partial class MainWindow : Window
         => ViewModel.Tools.SelectPaintCommand.Execute(null);
     private void OnSelectFill(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
         => ViewModel.Tools.SelectFillCommand.Execute(null);
+    private void OnSelectReplace(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ViewModel.Tools.SelectReplaceCommand.Execute(null);
+    private void OnSelectRect(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ViewModel.Tools.SelectRectCommand.Execute(null);
+    private void OnSelectLasso(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ViewModel.Tools.SelectLassoCommand.Execute(null);
     private void OnSelectRaise(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
         => ViewModel.Tools.SelectRaiseCommand.Execute(null);
     private void OnSelectLower(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -200,7 +250,7 @@ public partial class MainWindow : Window
             AllowMultiple = false,
             FileTypeFilter =
             [
-                new FilePickerFileType("Map Files") { Patterns = ["*.mul", "*.uop"] },
+                new FilePickerFileType("Map Files") { Patterns = ["*.mul", "*.uop", "*.uomap"] },
                 new FilePickerFileType("All Files") { Patterns = ["*.*"] },
             ],
         });
@@ -210,15 +260,84 @@ public partial class MainWindow : Window
         try
         {
             var filePath = files[0].Path.LocalPath;
-            var dims     = UltimaMapReader.DetectDimensions(filePath);
-            var reader   = new UltimaMapReader();
-            var map      = reader.Read(filePath, dims);
+            ViewModel.FilePath = filePath;
             ViewModel.RecentFiles.Add(filePath);
-            ViewModel.LoadMap(map, ViewportBorder.Bounds.Width, ViewportBorder.Bounds.Height);
+
+            if (filePath.EndsWith(".uomap", StringComparison.OrdinalIgnoreCase))
+            {
+                var map = UomapSerializer.Load(filePath);
+                ViewModel.LoadMap(map, ViewportBorder.Bounds.Width, ViewportBorder.Bounds.Height);
+            }
+            else
+            {
+                var dims   = UltimaMapReader.DetectDimensions(filePath);
+                var reader = new UltimaMapReader();
+                var map    = reader.Read(filePath, dims);
+                ViewModel.LoadMap(map, ViewportBorder.Bounds.Width, ViewportBorder.Bounds.Height);
+            }
         }
         catch (Exception ex)
         {
             await MessageBox.ShowDialog(this, $"Failed to open map:\n{ex.Message}", "Open Error");
+        }
+    }
+
+    private async void OnRequestSaveMap(string filePath)
+    {
+        try
+        {
+            UomapSerializer.Save(filePath, ViewModel.Map!);
+            UomapAutosave.DeleteSnapshot(filePath);
+            ViewModel.IsDirty = false;
+        }
+        catch (Exception ex)
+        {
+            await MessageBox.ShowDialog(this, $"Failed to save map:\n{ex.Message}", "Save Error");
+        }
+    }
+
+    private async void OnRequestSaveAsMap()
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save Map As",
+            DefaultExtension = ".uomap",
+            FileTypeChoices =
+            [
+                new FilePickerFileType("WorldPainter Map") { Patterns = ["*.uomap"] },
+            ],
+        });
+        if (file is null) return;
+        ViewModel.FilePath = file.Path.LocalPath;
+        ViewModel.RecentFiles.Add(ViewModel.FilePath);
+        OnRequestSaveMap(ViewModel.FilePath);
+    }
+
+    private async void OnRequestExportMap()
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export Map",
+            DefaultExtension = ".mul",
+            FileTypeChoices =
+            [
+                new FilePickerFileType("UO Classic Map") { Patterns = ["*.mul"] },
+                new FilePickerFileType("UO Enhanced Map") { Patterns = ["*.uop"] },
+            ],
+        });
+        if (file is null) return;
+
+        try
+        {
+            var path = file.Path.LocalPath;
+            if (path.EndsWith(".uop", StringComparison.OrdinalIgnoreCase))
+                new UopMapWriter().Write(path, ViewModel.Map!);
+            else
+                new UltimaMapWriter().Write(path, ViewModel.Map!);
+        }
+        catch (Exception ex)
+        {
+            await MessageBox.ShowDialog(this, $"Failed to export map:\n{ex.Message}", "Export Error");
         }
     }
 
@@ -235,11 +354,21 @@ public partial class MainWindow : Window
 
         try
         {
-            var dims   = UltimaMapReader.DetectDimensions(entry.Path);
-            var reader = new UltimaMapReader();
-            var map    = reader.Read(entry.Path, dims);
+            ViewModel.FilePath = entry.Path;
             ViewModel.RecentFiles.Add(entry.Path);
-            ViewModel.LoadMap(map, ViewportBorder.Bounds.Width, ViewportBorder.Bounds.Height);
+
+            if (entry.Path.EndsWith(".uomap", StringComparison.OrdinalIgnoreCase))
+            {
+                var map = UomapSerializer.Load(entry.Path);
+                ViewModel.LoadMap(map, ViewportBorder.Bounds.Width, ViewportBorder.Bounds.Height);
+            }
+            else
+            {
+                var dims   = UltimaMapReader.DetectDimensions(entry.Path);
+                var reader = new UltimaMapReader();
+                var map    = reader.Read(entry.Path, dims);
+                ViewModel.LoadMap(map, ViewportBorder.Bounds.Width, ViewportBorder.Bounds.Height);
+            }
         }
         catch (Exception ex)
         {
@@ -274,6 +403,64 @@ public partial class MainWindow : Window
             using var canvas = new SKCanvas(bitmap);
 
             renderService.Render(canvas, ViewModel.Map, w, h);
+
+            // Brush preview circle
+            var tool = ViewModel.Tools;
+            if (ViewModel.IsMapLoaded && tool.ActiveTool is ActiveTool.PaintBrush or ActiveTool.Raise
+                or ActiveTool.Lower or ActiveTool.Smooth or ActiveTool.Flatten or ActiveTool.Noise)
+            {
+                var mx = (float)ViewModel.MouseScreenX;
+                var my = (float)ViewModel.MouseScreenY;
+                var radius = tool.BrushRadius * (float)ViewModel.Zoom;
+                using var paint = new SKPaint
+                {
+                    Style = SKPaintStyle.Stroke,
+                    Color = new SKColor(255, 255, 255, 180),
+                    StrokeWidth = 2f,
+                    IsAntialias = true,
+                };
+                canvas.DrawCircle(mx, my, radius, paint);
+            }
+
+            // Selection overlay
+            var sel = ViewModel.ActiveSelection;
+            var z = (float)ViewModel.Zoom;
+            var ox = (float)ViewModel.OffsetX;
+            var oy = (float)ViewModel.OffsetY;
+            if (sel is RectangleSelection rectSel && rectSel.Bounds is { } rb)
+            {
+                var sx = (rb.MinX + ox) * z;
+                var sy = (rb.MinY + oy) * z;
+                var sw = (rb.MaxX - rb.MinX + 1) * z;
+                var sh = (rb.MaxY - rb.MinY + 1) * z;
+                using var paint = new SKPaint
+                {
+                    Style = SKPaintStyle.Stroke,
+                    Color = new SKColor(0, 200, 255, 220),
+                    StrokeWidth = 2f,
+                    IsAntialias = true,
+                    PathEffect = SKPathEffect.CreateDash([6f, 4f], 0),
+                };
+                canvas.DrawRect(sx, sy, sw, sh, paint);
+            }
+            else if (sel is LassoSelection lassoSel && lassoSel.Polygon.Count >= 3)
+            {
+                using var path = new SKPath();
+                var pts = lassoSel.Polygon;
+                path.MoveTo((pts[0].X + ox) * z, (pts[0].Y + oy) * z);
+                for (var i = 1; i < pts.Count; i++)
+                    path.LineTo((pts[i].X + ox) * z, (pts[i].Y + oy) * z);
+                path.Close();
+                using var paint = new SKPaint
+                {
+                    Style = SKPaintStyle.Stroke,
+                    Color = new SKColor(0, 200, 255, 220),
+                    StrokeWidth = 2f,
+                    IsAntialias = true,
+                    PathEffect = SKPathEffect.CreateDash([6f, 4f], 0),
+                };
+                canvas.DrawPath(path, paint);
+            }
 
             using var image = SKImage.FromBitmap(bitmap);
             using var data  = image.Encode(SKEncodedImageFormat.Png, 100);
@@ -343,6 +530,21 @@ public partial class MainWindow : Window
                     _needsRender = true;
             }
         }
+
+        if (_isSelecting)
+        {
+            _selEndX = pos.X;
+            _selEndY = pos.Y;
+            if (ViewModel.Tools.ActiveTool == ActiveTool.LassoSelect)
+            {
+                var tx = (int)((pos.X / ViewModel.Zoom) - ViewModel.OffsetX);
+                var ty = (int)((pos.Y / ViewModel.Zoom) - ViewModel.OffsetY);
+                var last = _lassoPoints[^1];
+                if (tx != last.X || ty != last.Y)
+                    _lassoPoints.Add((tx, ty));
+            }
+            _needsRender = true;
+        }
     }
 
     private void OnViewportPointerWheelChanged(object? sender, PointerWheelEventArgs e)
@@ -371,6 +573,17 @@ public partial class MainWindow : Window
                 _lastPanPoint = pos;
                 ViewportBorder.Cursor = new Cursor(StandardCursorType.Hand);
             }
+            else if (tool is ActiveTool.RectSelect or ActiveTool.LassoSelect)
+            {
+                _isSelecting = true;
+                _selStartX = _selEndX = pos.X;
+                _selStartY = _selEndY = pos.Y;
+                _lassoPoints.Clear();
+                _lassoPoints.Add((
+                    (int)((pos.X / ViewModel.Zoom) - ViewModel.OffsetX),
+                    (int)((pos.Y / ViewModel.Zoom) - ViewModel.OffsetY)));
+                ViewportBorder.Cursor = new Cursor(StandardCursorType.Cross);
+            }
             else
             {
                 // Editing mode — apply tool on first press
@@ -398,9 +611,78 @@ public partial class MainWindow : Window
     {
         _isPanning  = false;
         _isPainting = false;
+
+        if (_isSelecting)
+        {
+            _isSelecting = false;
+            var tool = ViewModel.Tools.ActiveTool;
+            var zoom = ViewModel.Zoom;
+            var ox = ViewModel.OffsetX;
+            var oy = ViewModel.OffsetY;
+
+            if (tool == ActiveTool.RectSelect)
+            {
+                var x0 = (int)((_selStartX / zoom) - ox);
+                var y0 = (int)((_selStartY / zoom) - oy);
+                var x1 = (int)((_selEndX / zoom) - ox);
+                var y1 = (int)((_selEndY / zoom) - oy);
+                ViewModel.ActiveSelection = new RectangleSelection(x0, y0, x1, y1);
+            }
+            else if (tool == ActiveTool.LassoSelect && _lassoPoints.Count >= 3)
+            {
+                ViewModel.ActiveSelection = new LassoSelection([.. _lassoPoints]);
+            }
+            _needsRender = true;
+        }
+
         ViewportBorder.Cursor = new Cursor(StandardCursorType.Arrow);
     }
 
     private void OnViewportSizeChanged(object? sender, SizeChangedEventArgs e)
         => _needsRender = true;
+
+    private void OnViewportDragEnter(object? sender, DragEventArgs e)
+    {
+        var files = e.DataTransfer.TryGetFiles();
+        if (files is null) return;
+        foreach (var item in files)
+        {
+            var ext = Path.GetExtension(item.Path.LocalPath).ToLowerInvariant();
+            if (ext is ".mul" or ".uop" or ".uomap")
+            {
+                e.DragEffects = DragDropEffects.Copy;
+                return;
+            }
+        }
+    }
+
+    private async void OnViewportDrop(object? sender, DragEventArgs e)
+    {
+        var files = e.DataTransfer.TryGetFiles();
+        if (files is null || files.Length == 0) return;
+        var filePath = files[0].Path.LocalPath;
+
+        try
+        {
+            ViewModel.FilePath = filePath;
+            ViewModel.RecentFiles.Add(filePath);
+
+            if (filePath.EndsWith(".uomap", StringComparison.OrdinalIgnoreCase))
+            {
+                var map = UomapSerializer.Load(filePath);
+                ViewModel.LoadMap(map, ViewportBorder.Bounds.Width, ViewportBorder.Bounds.Height);
+            }
+            else
+            {
+                var dims   = UltimaMapReader.DetectDimensions(filePath);
+                var reader = new UltimaMapReader();
+                var map    = reader.Read(filePath, dims);
+                ViewModel.LoadMap(map, ViewportBorder.Bounds.Width, ViewportBorder.Bounds.Height);
+            }
+        }
+        catch (Exception ex)
+        {
+            await MessageBox.ShowDialog(this, $"Failed to open dropped file:\n{ex.Message}", "Open Error");
+        }
+    }
 }

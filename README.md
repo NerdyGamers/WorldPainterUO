@@ -6,12 +6,50 @@ The project targets **C# / .NET 8**, **Avalonia UI**, **SkiaSharp**, JSON projec
 
 ## Goals
 
-- Import existing UO land maps.
+- Import existing UO land maps (`.mul`, `.uop`).
 - Edit terrain and elevation using paint-style tools.
-- Save non-destructive `.uomap` projects.
+- Save and load `.uomap` project files with full round-trip fidelity.
 - Preview terrain in radar, terrain, and hybrid modes.
 - Export valid `mapX.mul` and `map0LegacyMUL.uop` files.
 - Produce results usable in ServUO shard workflows.
+
+## Features
+
+- Import/export MUL and UOP map files with round-trip validation
+- Paint terrain tiles (brush, fill, replace) with configurable radius/strength
+- Raise/lower/smooth/flatten/noise height editing
+- Undo/redo with unlimited command history
+- Procedural map generation (island, archipelago, continent, world)
+- Selection tools (rectangle, lasso) for targeted editing
+- Stamp tool for placing terrain templates
+- Three view modes: radar, terrain, hybrid
+- Tile grid and chunk grid overlays
+- Minimap with cached rendering
+- File menu: New, Open (`.mul`/`.uop`/`.uomap`), Save, Export
+- Recent files list with persistence
+- Brush preview circle, status bar with tile info
+
+### Keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| `V` | Pan |
+| `B` | Paint brush |
+| `F` | Fill |
+| `R` | Raise height |
+| `L` | Lower height |
+| `S` | Smooth height |
+| `G` | Flatten height |
+| `N` | Noise |
+| `E` | Replace terrain |
+| `Ctrl+Z` | Undo |
+| `Ctrl+Y` | Redo |
+| `Ctrl+S` | Save |
+| `Ctrl+Shift+S` | Save As |
+| `Ctrl+O` | Open |
+| `Ctrl+E` | Export |
+| `Ctrl+=` / `Ctrl+-` | Zoom in / out |
+| `Ctrl+0` | Reset zoom |
 
 ## Repository purpose
 

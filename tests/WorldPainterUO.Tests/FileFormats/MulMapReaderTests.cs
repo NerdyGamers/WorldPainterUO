@@ -4,6 +4,7 @@ using WorldPainterUO.Tests.Fixtures;
 
 namespace WorldPainterUO.Tests.FileFormats;
 
+[Collection("UltimaSDK")]
 public class UltimaMapReaderTests : IDisposable
 {
     private readonly List<string> _tempFiles = [];
@@ -90,6 +91,9 @@ public class UltimaMapReaderTests : IDisposable
     [Fact]
     public void Read_non_aligned_dimensions_20x20()
     {
+        // SDK's TileMatrix uses floor division (>> 3) for block count, so
+        // a 20×20 file only covers 16×16 tiles.  Tiles outside that come
+        // back as 0.
         var dims = new MapDimensions(20, 20);
         var data = MulFixtureBuilder.BuildSimpleMap(20, 20, 0x1234, -5);
         var path = WriteTemp(data);
@@ -97,9 +101,14 @@ public class UltimaMapReaderTests : IDisposable
         var reader = new UltimaMapReader();
         var map = reader.Read(path, dims);
 
+        var sdkW = dims.Width & ~7;  // 16
+        var sdkH = dims.Height & ~7; // 16
         Assert.Equal(0x1234, map.Terrain[0, 0]);
-        Assert.Equal(0x1234, map.Terrain[19, 19]);
-        Assert.Equal(-5, map.Height[19, 19]);
+        Assert.Equal(0x1234, map.Terrain[sdkW - 1, sdkH - 1]);
+        Assert.Equal(-5, map.Height[sdkW - 1, sdkH - 1]);
+        // Tiles beyond the SDK range are zero
+        Assert.Equal(0, map.Terrain[dims.Width - 1, dims.Height - 1]);
+        Assert.Equal(0, map.Height[dims.Width - 1, dims.Height - 1]);
     }
 
     [Fact]

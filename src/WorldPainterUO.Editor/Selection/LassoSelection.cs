@@ -6,6 +6,7 @@ public sealed class LassoSelection : ISelection
 {
     private readonly (int X, int Y)[] _polygon;
     public MapBounds? Bounds { get; }
+    public IReadOnlyList<(int X, int Y)> Polygon => _polygon;
 
     public LassoSelection(IEnumerable<(int X, int Y)> points)
     {

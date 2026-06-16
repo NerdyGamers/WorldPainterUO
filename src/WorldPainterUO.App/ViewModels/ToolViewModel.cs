@@ -18,6 +18,8 @@ public enum ActiveTool
     Noise,
     Replace,
     Stamp,
+    RectSelect,
+    LassoSelect,
 }
 
 /// <summary>
@@ -62,9 +64,12 @@ public sealed partial class ToolViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsNoiseActive));
                 OnPropertyChanged(nameof(IsReplaceActive));
                 OnPropertyChanged(nameof(IsStampActive));
+                OnPropertyChanged(nameof(IsRectActive));
+                OnPropertyChanged(nameof(IsLassoActive));
                 OnPropertyChanged(nameof(ShowBiomePalette));
                 OnPropertyChanged(nameof(ShowBrushOptions));
                 OnPropertyChanged(nameof(ShowFlattenOptions));
+                OnPropertyChanged(nameof(ToolName));
             }
         }
     }
@@ -79,6 +84,25 @@ public sealed partial class ToolViewModel : ObservableObject
     public bool IsNoiseActive   => _activeTool == ActiveTool.Noise;
     public bool IsReplaceActive => _activeTool == ActiveTool.Replace;
     public bool IsStampActive   => _activeTool == ActiveTool.Stamp;
+    public bool IsRectActive    => _activeTool == ActiveTool.RectSelect;
+    public bool IsLassoActive   => _activeTool == ActiveTool.LassoSelect;
+
+    public string ToolName => _activeTool switch
+    {
+        ActiveTool.Pan        => "Pan",
+        ActiveTool.PaintBrush => "Paint Brush",
+        ActiveTool.Fill       => "Fill",
+        ActiveTool.Raise      => "Raise",
+        ActiveTool.Lower      => "Lower",
+        ActiveTool.Smooth     => "Smooth",
+        ActiveTool.Flatten    => "Flatten",
+        ActiveTool.Noise      => "Noise",
+        ActiveTool.Replace    => "Replace",
+        ActiveTool.Stamp      => "Stamp",
+        ActiveTool.RectSelect => "Rect Select",
+        ActiveTool.LassoSelect=> "Lasso Select",
+        _                     => "Pan",
+    };
 
     // Show biome palette when a terrain-painting tool is active
     public bool ShowBiomePalette => _activeTool is ActiveTool.PaintBrush or ActiveTool.Fill or ActiveTool.Replace;
@@ -141,6 +165,8 @@ public sealed partial class ToolViewModel : ObservableObject
     [RelayCommand] public void SelectFlatten() => ActiveTool = ActiveTool.Flatten;
     [RelayCommand] public void SelectNoise()   => ActiveTool = ActiveTool.Noise;
     [RelayCommand] public void SelectReplace() => ActiveTool = ActiveTool.Replace;
+    [RelayCommand] public void SelectRect() => ActiveTool = ActiveTool.RectSelect;
+    [RelayCommand] public void SelectLasso() => ActiveTool = ActiveTool.LassoSelect;
 }
 
 /// <summary>A single biome entry shown in the palette panel.</summary>

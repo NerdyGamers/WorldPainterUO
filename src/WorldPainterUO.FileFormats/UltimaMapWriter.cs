@@ -22,14 +22,15 @@ public sealed class UltimaMapWriter : IMapFileWriter
             filePath, map.Dimensions.Width, map.Dimensions.Height);
 
         var dims = map.Dimensions;
-        var blockWidth = dims.BlockWidth;
-        var blockHeight = dims.BlockHeight;
-        var blockCount = dims.TotalBlocks;
+        // SDK's TileMatrix uses floor division (>> 3) for block count.  Must
+        // match so MUL offset formula ((x * BlockHeight) + y) * 196 + 4 works.
+        var blockWidth = dims.Width >> 3;
+        var blockHeight = dims.Height >> 3;
+        var blockCount = blockWidth * blockHeight;
         var data = new byte[blockCount * BlockSize];
 
         // Column-major block order: X varies slowest (matching real UO MUL format)
         for (var blockX = 0; blockX < blockWidth; blockX++)
-        {
             for (var blockY = 0; blockY < blockHeight; blockY++)
             {
                 var blockIndex = blockX * blockHeight + blockY;
@@ -59,7 +60,6 @@ public sealed class UltimaMapWriter : IMapFileWriter
 
                         tileOffset += TileSize;
                     }
-                }
             }
         }
 

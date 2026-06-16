@@ -4,6 +4,7 @@ using WorldPainterUO.Tests.Fixtures;
 
 namespace WorldPainterUO.Tests.FileFormats;
 
+[Collection("UltimaSDK")]
 public class UltimaMapWriterTests : IDisposable
 {
     private readonly List<string> _tempFiles = [];
@@ -101,6 +102,9 @@ public class UltimaMapWriterTests : IDisposable
     [Fact]
     public void Round_trip_non_aligned_20x20()
     {
+        // SDK's TileMatrix floor-divides dimensions, so a 20×20 map only
+        // covers 16×16 tiles.  Tiles beyond that come back as 0.
+        var dims = new MapDimensions(20, 20);
         var original = WorldMap.Create(20, 20, "Test", SourceFileType.Mul);
         for (var y = 0; y < 20; y++)
             for (var x = 0; x < 20; x++)
@@ -112,8 +116,15 @@ public class UltimaMapWriterTests : IDisposable
         var path = GetTempPath();
         new UltimaMapWriter().Write(path, original);
 
-        var reloaded = new UltimaMapReader().Read(path, new MapDimensions(20, 20));
-        AssertMapsEqual(original, reloaded);
+        var reloaded = new UltimaMapReader().Read(path, dims);
+        var sdkW = dims.Width & ~7;  // 16
+        var sdkH = dims.Height & ~7; // 16
+        for (var y = 0; y < sdkH; y++)
+            for (var x = 0; x < sdkW; x++)
+            {
+                Assert.Equal(original.Terrain[x, y], reloaded.Terrain[x, y]);
+                Assert.Equal(original.Height[x, y], reloaded.Height[x, y]);
+            }
     }
 
     [Fact]

@@ -10,8 +10,10 @@ using CommunityToolkit.Mvvm.Input;
 using WorldPainterUO.App.Configuration;
 using WorldPainterUO.Core;
 using WorldPainterUO.Editor;
+using WorldPainterUO.Editor.Selection;
 using WorldPainterUO.Editor.Tools;
 using WorldPainterUO.FileFormats;
+using WorldPainterUO.Project;
 using WorldPainterUO.Rendering;
 
 namespace WorldPainterUO.App.ViewModels;
@@ -19,9 +21,13 @@ namespace WorldPainterUO.App.ViewModels;
 public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
     private WorldMap? _map;
+    private string? _filePath;
+    private bool _isDirty;
     private double _offsetX;
     private double _offsetY;
     private double _zoom = 1.0;
+    private double _viewportWidth;
+    private double _viewportHeight;
     private int _tileX;
     private int _tileY;
     private ushort _tileId;
@@ -60,9 +66,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public RecentFiles RecentFiles { get; }
 
-    public string Title => _map is null
-        ? "WorldPainterUO"
-        : $"WorldPainterUO \u2014 {_map.Dimensions.Width}\u00d7{_map.Dimensions.Height} ({_map.Metadata.Facet})";
+    public string Title
+    {
+        get
+        {
+            if (_map is null) return "WorldPainterUO";
+            var name = _filePath is not null ? Path.GetFileName(_filePath) : "Untitled";
+            var dirty = _isDirty ? " \u2022" : "";
+            return $"WorldPainterUO \u2014 {name}{dirty}  [{_map.Dimensions.Width}\u00d7{_map.Dimensions.Height} {_map.Metadata.Facet}]";
+        }
+    }
 
     public WorldMap? Map
     {
@@ -78,6 +91,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public bool IsMapLoaded => _map is not null;
     public MapDimensions? MapDimensions => _map?.Dimensions;
+
+    public string? FilePath
+    {
+        get => _filePath;
+        set
+        {
+            if (SetProperty(ref _filePath, value))
+                OnPropertyChanged(nameof(Title));
+        }
+    }
+
+    public bool IsDirty
+    {
+        get => _isDirty;
+        set
+        {
+            if (SetProperty(ref _isDirty, value))
+                OnPropertyChanged(nameof(Title));
+        }
+    }
 
     public double OffsetX
     {
@@ -146,6 +179,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<LayerItem> Layers { get; }
 
+    public ISelection? ActiveSelection { get; set; }
+
     public string StatusText => _map is null
         ? "No map loaded"
         : $"Tile: ({_tileX}, {_tileY})  ID: 0x{_tileId:X4}  Z: {_tileZ,4}  Zoom: {ZoomPercent}";
@@ -167,6 +202,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return false;
 
         var t = Tools;
+        var sel = ActiveSelection;
         var tileId = t.ActiveBiome is { } b && b.Definition.Tiles.Count > 0
             ? b.Definition.Tiles[0].TileId
             : (ushort)3;
@@ -181,41 +217,45 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                     t.BrushRadius,
                     t.BrushStrength,
                     t.BrushHardness,
-                    seed: 0),
+                    seed: 0,
+                    selection: sel),
 
             // FillTool: (map, cx, cy, tileId)
             ActiveTool.Fill when t.ActiveBiome is not null =>
-                FillTool.Execute(_map, tileX, tileY, tileId),
+                FillTool.Execute(_map, tileX, tileY, tileId, selection: sel),
 
             // RaiseTool: (map, cx, cy, radius, sbyte amount, selection?)
             // Convert.ToSByte guarantees sbyte narrowing without implicit int overflow.
             ActiveTool.Raise =>
                 RaiseTool.Execute(_map, tileX, tileY, t.BrushRadius,
-                    Convert.ToSByte(Math.Clamp((int)(t.BrushStrength * 5), 1, 10))),
+                    Convert.ToSByte(Math.Clamp((int)(t.BrushStrength * 5), 1, 10)),
+                    selection: sel),
 
             // LowerTool: same signature — takes positive sbyte, subtracts internally.
             ActiveTool.Lower =>
                 LowerTool.Execute(_map, tileX, tileY, t.BrushRadius,
-                    Convert.ToSByte(Math.Clamp((int)(t.BrushStrength * 5), 1, 10))),
+                    Convert.ToSByte(Math.Clamp((int)(t.BrushStrength * 5), 1, 10)),
+                    selection: sel),
 
             // SmoothTool: (map, cx, cy, radius, selection?) — no strength param
             ActiveTool.Smooth =>
-                SmoothTool.Execute(_map, tileX, tileY, t.BrushRadius),
+                SmoothTool.Execute(_map, tileX, tileY, t.BrushRadius, selection: sel),
 
             // FlattenTool: (map, cx, cy, radius, targetZ)
             ActiveTool.Flatten =>
-                FlattenTool.Execute(_map, tileX, tileY, t.BrushRadius, t.FlattenZ),
+                FlattenTool.Execute(_map, tileX, tileY, t.BrushRadius, t.FlattenZ, selection: sel),
 
             // NoiseTool: (map, cx, cy, radius, magnitude)
             ActiveTool.Noise =>
-                NoiseTool.Execute(_map, tileX, tileY, t.BrushRadius, (sbyte)(t.BrushStrength * 10)),
+                NoiseTool.Execute(_map, tileX, tileY, t.BrushRadius, (sbyte)(t.BrushStrength * 10), selection: sel),
 
             // ReplaceTool: (map, findTileId, replaceTileId, bounds?, selection?)
             ActiveTool.Replace when t.ActiveBiome is not null =>
                 ReplaceTool.Execute(
                     _map,
                     _map.Terrain[tileX, tileY],
-                    tileId),
+                    tileId,
+                    selection: sel),
 
             _ => null,
         };
@@ -223,6 +263,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (cmd is null) return false;
 
         History.Execute(cmd, _map);
+        IsDirty = true;
         RenderService.InvalidateAll();
         MinimapRenderer.Invalidate();
         return true;
@@ -239,7 +280,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public void ApplyUoDataPath(string? path)
     {
-        UltimaSDKBridge.InitializeFromSettings(path);         RenderService.TryLoadRadarColors(path);
+        UltimaMapReader.SetDataPath(path);
+        RenderService.TryLoadRadarColors(path);
         MinimapRenderer.TryLoadRadarColors(path);
         RenderService.InvalidateAll();
         MinimapRenderer.Invalidate();
@@ -282,14 +324,42 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void TriggerAutosave()
     {
-        if (_map is null) return;
-        System.Diagnostics.Debug.WriteLine($"[Autosave] {DateTime.Now:HH:mm:ss}");
+        if (_map is null || !IsDirty) return;
+        try
+        {
+            var path = _filePath ?? Path.Combine(AppPreferences.DirectoryPath, "autosave.uomap");
+            UomapAutosave.SaveSnapshot(path, _map);
+        }
+        catch
+        {
+            // Silently ignore autosave failures — data loss is prevented by
+            // the write-then-rename strategy in UomapAutosave.
+        }
     }
 
     // ── Commands ──────────────────────────────────────────────────────────────
 
     [RelayCommand] private void NewMap() => RequestNewMap?.Invoke();
     [RelayCommand] private void OpenMap() => RequestOpenMap?.Invoke();
+
+    public event Action<string>? RequestSaveMap;
+    public event Action?          RequestSaveAsMap;
+    public event Action?          RequestExportMap;
+
+    [RelayCommand]
+    private void SaveMap()
+    {
+        if (_filePath is not null)
+            RequestSaveMap?.Invoke(_filePath);
+        else
+            RequestSaveAsMap?.Invoke();
+    }
+
+    [RelayCommand]
+    private void SaveAsMap() => RequestSaveAsMap?.Invoke();
+
+    [RelayCommand]
+    private void ExportMap() => RequestExportMap?.Invoke();
 
     [RelayCommand]
     private void Undo()
@@ -305,9 +375,34 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (History.Redo(_map)) { RenderService.InvalidateAll(); MinimapRenderer.Invalidate(); }
     }
 
-    [RelayCommand] private void ZoomIn() { Zoom *= 2.0; OnPropertyChanged(nameof(StatusText)); }
-    [RelayCommand] private void ZoomOut() { Zoom /= 2.0; OnPropertyChanged(nameof(StatusText)); }
-    [RelayCommand] private void ResetZoom() { Zoom = 1.0; OffsetX = 0; OffsetY = 0; OnPropertyChanged(nameof(StatusText)); }
+    public double ViewportWidth  { get => _viewportWidth;  set => SetProperty(ref _viewportWidth, value); }
+    public double ViewportHeight { get => _viewportHeight; set => SetProperty(ref _viewportHeight, value); }
+
+    [RelayCommand]
+    private void ZoomIn()
+    {
+        if (_viewportWidth <= 0 || _viewportHeight <= 0) { Zoom *= 1.2; OnPropertyChanged(nameof(StatusText)); return; }
+        ZoomAtPoint(_zoom * 1.2, _viewportWidth / 2.0, _viewportHeight / 2.0);
+    }
+
+    [RelayCommand]
+    private void ZoomOut()
+    {
+        if (_viewportWidth <= 0 || _viewportHeight <= 0) { Zoom /= 1.2; OnPropertyChanged(nameof(StatusText)); return; }
+        ZoomAtPoint(_zoom / 1.2, _viewportWidth / 2.0, _viewportHeight / 2.0);
+    }
+
+    [RelayCommand]
+    private void ResetZoom() { Zoom = 1.0; OffsetX = 0; OffsetY = 0; OnPropertyChanged(nameof(StatusText)); }
+
+    private void ZoomAtPoint(double newZoom, double centerX, double centerY)
+    {
+        var oldZoom = _zoom;
+        Zoom = newZoom;
+        OffsetX = centerX / _zoom - (centerX / oldZoom - _offsetX);
+        OffsetY = centerY / _zoom - (centerY / oldZoom - _offsetY);
+        OnPropertyChanged(nameof(StatusText));
+    }
 
     // ── Map interaction ───────────────────────────────────────────────────────
 
@@ -316,6 +411,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Map = map;
         History.Clear();
         RenderService.ClearCache();
+        ViewportWidth = viewportWidth;
+        ViewportHeight = viewportHeight;
         ResetView();
 
         if (viewportWidth > 0 && viewportHeight > 0)
@@ -337,8 +434,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(StatusText));
     }
 
+    public double MouseScreenX { get; private set; }
+    public double MouseScreenY { get; private set; }
+
     public void UpdateMousePosition(double canvasX, double canvasY)
     {
+        MouseScreenX = canvasX;
+        MouseScreenY = canvasY;
         if (_map is null) return;
         var tileX = (int)((canvasX / _zoom) - _offsetX);
         var tileY = (int)((canvasY / _zoom) - _offsetY);
@@ -353,12 +455,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public void HandleScroll(double deltaX, double deltaY, double mouseX, double mouseY)
     {
-        var oldZoom = _zoom;
-        Zoom = deltaY > 0 ? _zoom * 2.0 : _zoom * 0.5;
-        var ratio = _zoom / oldZoom;
-        OffsetX = mouseX / _zoom - (mouseX / oldZoom - _offsetX) * ratio;
-        OffsetY = mouseY / _zoom - (mouseY / oldZoom - _offsetY) * ratio;
-        OnPropertyChanged(nameof(StatusText));
+        var step = 1.0 + Math.Abs(deltaY) * 0.1;
+        var newZoom = deltaY > 0 ? _zoom * step : _zoom / step;
+        ZoomAtPoint(newZoom, mouseX, mouseY);
     }
 
     public void Pan(double deltaX, double deltaY)

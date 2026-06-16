@@ -7,13 +7,16 @@
         x:Class="WorldPainterUO.App.MainWindow"
         Title="{Binding Title}"
         Width="1280"
-        Height="800">
+        Height="800"
+        Closing="OnWindowClosing">
     <DockPanel>
         <!-- Menu bar -->
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
-                <MenuItem Header="_New Map"  Command="{Binding NewMapCommand}"  InputGesture="Ctrl+N" />
-                <MenuItem Header="_Open..." Command="{Binding OpenMapCommand}" InputGesture="Ctrl+O" />
+                <MenuItem Header="_New Map"     Command="{Binding NewMapCommand}"    InputGesture="Ctrl+N" />
+                <MenuItem Header="_Open..."     Command="{Binding OpenMapCommand}"   InputGesture="Ctrl+O" />
+                <MenuItem Header="_Save"        Command="{Binding SaveMapCommand}"   InputGesture="Ctrl+S" />
+                <MenuItem Header="Save _As..."  Command="{Binding SaveAsMapCommand}" InputGesture="Ctrl+Shift+S" />
                 <MenuItem Header="_Recent" x:Name="RecentMenu"
                           ItemsSource="{Binding RecentFiles.Entries}">
                     <MenuItem.ItemTemplate>
@@ -22,6 +25,8 @@
                         </DataTemplate>
                     </MenuItem.ItemTemplate>
                 </MenuItem>
+                <Separator />
+                <MenuItem Header="_Export..."   Command="{Binding ExportMapCommand}" InputGesture="Ctrl+E" />
                 <Separator />
                 <MenuItem Header="_Settings..." Click="OnOpenSettings" InputGesture="Ctrl+," />
                 <Separator />
@@ -35,13 +40,13 @@
 
             <MenuItem Header="_View">
                 <MenuItem Header="Render Mode">
-                    <MenuItem Header="_Radar View"   Click="OnSetRadarMode" />
-                    <MenuItem Header="_Terrain View" Click="OnSetTerrainMode" />
-                    <MenuItem Header="_Hybrid View"  Click="OnSetHybridMode" />
+                    <MenuItem Header="_Radar View"   Click="OnSetRadarMode"   IsChecked="{Binding IsRadarMode}" />
+                    <MenuItem Header="_Terrain View" Click="OnSetTerrainMode" IsChecked="{Binding IsTerrainMode}" />
+                    <MenuItem Header="_Hybrid View"  Click="OnSetHybridMode"  IsChecked="{Binding IsHybridMode}" />
                 </MenuItem>
                 <Separator />
-                <MenuItem Header="Show _Tile Grid"  Click="OnToggleTileGrid"  InputGesture="Ctrl+G" />
-                <MenuItem Header="Show _Chunk Grid" Click="OnToggleChunkGrid" InputGesture="Ctrl+Shift+G" />
+                <MenuItem Header="Show _Tile Grid"  IsChecked="{Binding ShowTileGrid}"  Click="OnToggleTileGrid"  InputGesture="Ctrl+G" />
+                <MenuItem Header="Show _Chunk Grid" IsChecked="{Binding ShowChunkGrid}" Click="OnToggleChunkGrid" InputGesture="Ctrl+Shift+G" />
                 <Separator />
                 <MenuItem Header="Zoom _In"    Command="{Binding ZoomInCommand}"    InputGesture="Ctrl+OemPlus" />
                 <MenuItem Header="Zoom _Out"   Command="{Binding ZoomOutCommand}"   InputGesture="Ctrl+OemMinus" />
@@ -55,7 +60,30 @@
                 Padding="8,4"
                 BorderBrush="#333"
                 BorderThickness="0,1,0,0">
-            <TextBlock Text="{Binding StatusText}" Foreground="#aaa" FontSize="12" />
+            <StackPanel Orientation="Horizontal" Spacing="16">
+                <StackPanel.Styles>
+                    <Style Selector="TextBlock">
+                        <Setter Property="Foreground" Value="#aaa" />
+                        <Setter Property="FontSize" Value="12" />
+                        <Setter Property="VerticalAlignment" Value="Center" />
+                    </Style>
+                    <Style Selector="TextBlock.label">
+                        <Setter Property="Foreground" Value="#666" />
+                        <Setter Property="FontSize" Value="10" />
+                    </Style>
+                </StackPanel.Styles>
+                <TextBlock FontWeight="Bold" Foreground="#eee"
+                           Text="{Binding Tools.ToolName}"
+                           IsVisible="{Binding IsMapLoaded}" />
+                <TextBlock Text="|" Foreground="#444" IsVisible="{Binding IsMapLoaded}" />
+                <TextBlock Text="{Binding TileX, StringFormat='X: {0}'}" IsVisible="{Binding IsMapLoaded}" />
+                <TextBlock Text="{Binding TileY, StringFormat='Y: {0}'}" IsVisible="{Binding IsMapLoaded}" />
+                <TextBlock Text="|" Foreground="#444" IsVisible="{Binding IsMapLoaded}" />
+                <TextBlock Text="{Binding TileId, StringFormat='ID: 0x{0:X4}'}" IsVisible="{Binding IsMapLoaded}" />
+                <TextBlock Text="{Binding TileZ, StringFormat='Z: {0}'}" IsVisible="{Binding IsMapLoaded}" />
+                <TextBlock Text="|" Foreground="#444" IsVisible="{Binding IsMapLoaded}" />
+                <TextBlock Text="{Binding ZoomPercent, StringFormat='Zoom: {0}'}" Foreground="#6af" IsVisible="{Binding IsMapLoaded}" />
+            </StackPanel>
         </Border>
 
         <!-- Left tool strip -->
@@ -132,6 +160,32 @@
                         Padding="4">
                     <TextBlock Text="&#x2248;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Button>
+                <Separator Height="1" Background="#444" Margin="2,4" />
+                <!-- Replace -->
+                <Button Width="36" Height="36"
+                        ToolTip.Tip="Replace Terrain"
+                        Click="OnSelectReplace"
+                        Background="{Binding Tools.IsReplaceActive, Converter={StaticResource BoolToActiveButtonConverter}}"
+                        Padding="4">
+                    <TextBlock Text="&#x21C4;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+                <Separator Height="1" Background="#444" Margin="2,4" />
+                <!-- Rect Select -->
+                <Button Width="36" Height="36"
+                        ToolTip.Tip="Rectangle Select (M)"
+                        Click="OnSelectRect"
+                        Background="{Binding Tools.IsRectActive, Converter={StaticResource BoolToActiveButtonConverter}}"
+                        Padding="4">
+                    <TextBlock Text="&#x25AD;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+                <!-- Lasso Select -->
+                <Button Width="36" Height="36"
+                        ToolTip.Tip="Lasso Select"
+                        Click="OnSelectLasso"
+                        Background="{Binding Tools.IsLassoActive, Converter={StaticResource BoolToActiveButtonConverter}}"
+                        Padding="4">
+                    <TextBlock Text="&#x2B22;" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
             </StackPanel>
         </Border>
 
@@ -160,22 +214,62 @@
                         <!-- Brush Options -->
                         <StackPanel IsVisible="{Binding Tools.ShowBrushOptions}" Spacing="6">
                             <TextBlock Text="Brush" FontWeight="Bold" Foreground="#ccc" FontSize="12" />
-                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" HorizontalAlignment="Stretch">
+                            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto" HorizontalAlignment="Stretch">
                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Size" Foreground="#aaa" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
                                 <Slider  Grid.Row="0" Grid.Column="1"
                                          Minimum="1" Maximum="64"
                                          Value="{Binding Tools.BrushRadius}"
                                          TickFrequency="1" IsSnapToTickEnabled="True" />
+                                <TextBlock Grid.Row="0" Grid.Column="2"
+                                           Text="{Binding Tools.BrushRadius}"
+                                           Foreground="#6af" FontSize="11"
+                                           FontWeight="Bold"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Right"
+                                           MinWidth="20" />
 
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Strength" Foreground="#aaa" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
                                 <Slider  Grid.Row="1" Grid.Column="1"
                                          Minimum="0.01" Maximum="1.0"
                                          Value="{Binding Tools.BrushStrength}" />
+                                <TextBlock Grid.Row="1" Grid.Column="2"
+                                           Text="{Binding Tools.BrushStrength}"
+                                           Foreground="#6af" FontSize="11"
+                                           FontWeight="Bold"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Right"
+                                           MinWidth="20" />
 
                                 <TextBlock Grid.Row="2" Grid.Column="0" Text="Hardness" Foreground="#aaa" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
                                 <Slider  Grid.Row="2" Grid.Column="1"
                                          Minimum="0.1" Maximum="1.0"
                                          Value="{Binding Tools.BrushHardness}" />
+                                <TextBlock Grid.Row="2" Grid.Column="2"
+                                           Text="{Binding Tools.BrushHardness}"
+                                           Foreground="#6af" FontSize="11"
+                                           FontWeight="Bold"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Right"
+                                           MinWidth="20" />
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Zoom -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Zoom" FontWeight="Bold" Foreground="#ccc" FontSize="12" />
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Slider Grid.Column="0"
+                                        Minimum="0.03125" Maximum="16"
+                                        Value="{Binding Zoom}"
+                                        SmallChange="0.01"
+                                        LargeChange="0.1" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding ZoomPercent}"
+                                           Foreground="#6af" FontSize="11"
+                                           FontWeight="Bold"
+                                           VerticalAlignment="Center"
+                                           MinWidth="48"
+                                           HorizontalAlignment="Right" />
                             </Grid>
                         </StackPanel>
 
@@ -242,8 +336,8 @@
                         <!-- Minimap -->
                         <TextBlock Text="Minimap" FontWeight="Bold" Foreground="#ccc" FontSize="12" />
                         <Border Background="#1a1a2e"
-                                Width="200"
-                                Height="160"
+                                Width="224"
+                                Height="240"
                                 CornerRadius="4">
                             <Image x:Name="MinimapImage" Stretch="Uniform" />
                         </Border>

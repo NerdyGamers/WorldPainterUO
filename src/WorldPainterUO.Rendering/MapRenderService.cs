@@ -87,6 +87,7 @@ public sealed class MapRenderService
     {
         canvas.Clear(new SKColor(20, 20, 30));
 
+        if (map is null) return;
         var dims     = map.Dimensions;
         var tileSize = Zoom;
 

@@ -1,77 +1,71 @@
-using System.Text;
+using Ultima.Helpers;
 
 namespace WorldPainterUO.FileFormats.Uop;
 
 /// <summary>
-/// Low-level UOP container format definitions and helpers.
+/// Low-level UOP container format definitions and helpers for the per-block
+/// map format (as read by the Ultima SDK's TileMatrix).
 ///
-/// FORMAT ASSUMPTIONS:
-/// The UOP (Ultima Online Package) format is a container that wraps one or
-/// more files (typically MUL data) into a single archive.  The format details
-/// are partially reverse-engineered from the UO client and community tools.
-///
-/// Known uncertainties:
-/// - The exact header layout may vary between UOP versions.  We assume a
-///   40-byte header common in version-5 UOP containers.
-/// - The hash function used for entry lookup is a 32-bit rolling hash with
-///   multiplier 0x0103.  Upper 32 bits of the stored ulong are zero.
-/// - The hash-table block size is typically 100 entries per block.
-/// - Data within the UOP may be compressed (zlib/deflate) or raw.
-///   We assume raw (uncompressed) storage for the legacy MUL wrapper.
-/// - No checksum or integrity validation is performed on the container.
-///
-/// These assumptions are sufficient for self-consistent round-trip (write then
-/// read back).  Compatibility with UOP files produced by the official UO client
-/// or third-party tools may require adjustments.
+/// Entry name pattern: <c>build/{pattern}/{index:D8}.dat</c>
+/// Hash function: <see cref="UopUtils.HashFileName"/> (from the Ultima SDK)
 /// </summary>
 internal static class UopFormat
 {
-    public const int HeaderSize = 40;
-    public const int DefaultBlockSize = 100;
-    public const int EntrySize = 24;
-    public const int BlockHeaderSize = 8; // nextBlock (4) + entryCount (4)
-    public const int Signature = 0;
+    /// <summary>UOP file signature bytes (0x50594D = "MYNP" little-endian).</summary>
+    public const uint Signature = 0x50594D;
+
+    /// <summary>UOP container version.</summary>
     public const int Version = 5;
 
-    /// <summary>
-    /// Hash function for UOP internal file paths.  Lowercased, forward-slash
-    /// normalized, then a 32-bit rolling hash with multiplier 0x0103.
-    /// </summary>
-    public static ulong HashFileName(string name)
-    {
-        name = name.ToLowerInvariant().Replace('\\', '/');
+    /// <summary>Size of the UOP file header in bytes.</summary>
+    public const int HeaderSize = 40;
 
-        if (name.Length > 0 && name[0] == '/')
-            name = name[1..];
+    /// <summary>Maximum entries per hash table block.</summary>
+    public const int DefaultBlockSize = 100;
 
-        ulong hash = 0;
+    /// <summary>Size of each hash table entry in bytes (per-block format).</summary>
+    public const int PerEntrySize = 34;
 
-        foreach (var c in name)
-        {
-            hash = (hash * 0x0103) + c;
-            hash &= 0xFFFFFFFF;
-        }
+    /// <summary>Size of each hash table block header in bytes (entryCount + nextBlock).</summary>
+    public const int PerBlockHeaderSize = 12;
 
-        return hash;
-    }
+    /// <summary>Raw size of one land tile data block (64 tiles x 3 bytes).</summary>
+    public const int LandBlockDataSize = 192;
 
     /// <summary>
-    /// The internal path used for the legacy MUL map data inside the UOP.
+    /// Delegates to <see cref="UopUtils.HashFileName"/> from the Ultima SDK.
     /// </summary>
-    public static string MapDataPath(int mapIndex) =>
-        $"build/map/{mapIndex}/legacymul";
-
-    /// <summary>
-    /// Calculates the byte offset where file data begins, based on the
-    /// header size and the number of hash table blocks.
-    /// </summary>
-    public static int DataOffset(int blockCount) =>
-        HeaderSize + blockCount * (BlockHeaderSize + DefaultBlockSize * EntrySize);
+    public static ulong HashFileName(string name) => UopUtils.HashFileName(name);
 
     /// <summary>
     /// Calculates the number of hash table blocks needed for a given
-    /// number of files.
+    /// number of entries.
     /// </summary>
-    public static int BlockCount(int fileCount) =>
-        (fileCount + DefaultBlockSize - 1) / DefaultBlockSize;
+    public static int BlockCount(int entryCount) =>
+        (entryCount + DefaultBlockSize - 1) / DefaultBlockSize;
+
+    /// <summary>
+    /// Calculates the total size of the hash table in bytes.
+    /// </summary>
+    public static int HashTableSize(int entryCount)
+    {
+        var blocks = BlockCount(entryCount);
+        var size = 0;
+        var remaining = entryCount;
+
+        for (var b = 0; b < blocks; b++)
+        {
+            var entriesInBlock = Math.Min(DefaultBlockSize, remaining);
+            size += PerBlockHeaderSize + entriesInBlock * PerEntrySize;
+            remaining -= entriesInBlock;
+        }
+
+        return size;
+    }
+
+    /// <summary>
+    /// Entry name for a land block in per-block UOP format.
+    /// </summary>
+    public static string BlockEntryName(string pattern, int blockIndex) =>
+        $"build/{pattern}/{blockIndex:D8}.dat";
 }

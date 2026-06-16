@@ -3,10 +3,20 @@ using Avalonia.Layout;
 
 namespace WorldPainterUO.App.Views;
 
+public enum MessageBoxResult { Ok, Yes, No, Cancel }
+public enum MessageBoxButtons { Ok, YesNo, YesNoCancel }
+
 public static class MessageBox
 {
-    public static async Task ShowDialog(Window owner, string message, string title)
+    public static Task ShowDialog(Window owner, string message, string title)
+        => ShowDialog(owner, message, title, MessageBoxButtons.Ok);
+
+    public static async Task<MessageBoxResult> ShowDialog(
+        Window owner, string message, string title,
+        MessageBoxButtons buttons = MessageBoxButtons.Ok)
     {
+        var result = MessageBoxResult.Ok;
+
         var dialog = new Window
         {
             Title = title,
@@ -24,16 +34,27 @@ public static class MessageBox
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        var okButton = new Button { Content = "OK", Width = 80, IsDefault = true };
-        okButton.Click += (_, _) => dialog.Close();
-
         var buttonPanel = new StackPanel
         {
             Spacing = 8,
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Avalonia.Thickness(0, 0, 16, 12),
-            Children = { okButton },
         };
+
+        Button Make(string text, MessageBoxResult r, bool defaultBtn = false)
+        {
+            var btn = new Button { Content = text, Width = 80, IsDefault = defaultBtn };
+            btn.Click += (_, _) => { result = r; dialog.Close(); };
+            return btn;
+        }
+
+        buttonPanel.Children.AddRange(buttons switch
+        {
+            MessageBoxButtons.Ok =>         [ Make("OK", MessageBoxResult.Ok, true) ],
+            MessageBoxButtons.YesNo =>      [ Make("Yes", MessageBoxResult.Yes, true), Make("No", MessageBoxResult.No) ],
+            MessageBoxButtons.YesNoCancel => [ Make("Yes", MessageBoxResult.Yes, true), Make("No", MessageBoxResult.No), Make("Cancel", MessageBoxResult.Cancel) ],
+            _ =>                            [ Make("OK", MessageBoxResult.Ok, true) ],
+        });
 
         var buttonBar = new Border
         {
@@ -48,5 +69,6 @@ public static class MessageBox
 
         dialog.Content = layout;
         await dialog.ShowDialog(owner);
+        return result;
     }
 }

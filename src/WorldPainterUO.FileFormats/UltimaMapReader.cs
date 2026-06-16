@@ -113,19 +113,64 @@ public sealed class UltimaMapReader
     /// The map file directory is registered as a FALLBACK data path only —
     /// it is ignored when the user has already set a path via
     /// <see cref="SetDataPath"/>.
+    ///
+    /// For non-standard filenames, the exact file path is registered with the
+    /// SDK under the standard key (e.g. "map0legacymul.uop") so the SDK's
+    /// TileMatrix can resolve it regardless of the actual file name.
     /// </summary>
     public WorldMap Read(string filePath, MapDimensions dims)
     {
+        ArgumentNullException.ThrowIfNull(filePath);
+        if (filePath.Length == 0)
+            throw new ArgumentException("Path must not be empty.", nameof(filePath));
+        if (!File.Exists(filePath))
+            throw new FileNotFoundException("Map file not found.", filePath);
+        var isMul = filePath.EndsWith(".mul", StringComparison.OrdinalIgnoreCase);
+        if (isMul)
+        {
+            var requiredBytes = (long)(dims.Width >> 3) * (dims.Height >> 3) * 196;
+            var actualBytes = new FileInfo(filePath).Length;
+            if (actualBytes < requiredBytes)
+                throw new MulFormatException(
+                    $"MUL file is too short: {actualBytes} bytes, need {requiredBytes} bytes.");
+        }
+
+        var mapIndex = FacetToMapIndex(dims.Facet, filePath);
+        var isUop = filePath.EndsWith(".uop", StringComparison.OrdinalIgnoreCase);
+
+        // ── Isolate from stale SDK static state ──────────────────────────────
+        // Reset stale entries for this map index so SetMulPath doesn't skip them
+        // (absolute paths are left unchanged by SetMulPath's continue branch).
+        // Setting to empty string forces a fresh evaluation of the file's existence.
+        foreach (var key in new[]
+        {
+            $"map{mapIndex}.mul",
+            $"map{mapIndex}legacymul.uop",
+            $"staidx{mapIndex}.mul",
+            $"statics{mapIndex}.mul",
+        })
+        {
+            if (Files.MulPath.ContainsKey(key))
+                Files.MulPath[key] = string.Empty;
+        }
+
         // Register the map directory as a low-priority fallback.
-        // SetDataPath (Settings) always wins over this.
         var dataDir = Path.GetDirectoryName(filePath) ?? string.Empty;
         _fallbackPath = dataDir;
         if (!HasSettingsPath)
             Files.SetMulPath(dataDir);
 
-        var mapIndex = FacetToMapIndex(dims.Facet, filePath);
-        var sdkMap   = MapIndexToSdkMap(mapIndex);
-        var worldMap = WorldMap.Create(dims.Width, dims.Height, dims.Facet, SourceFileType.Mul);
+        // Register the exact file path under the key the SDK expects.
+        var standardKey = isUop
+            ? $"map{mapIndex}legacymul.uop"
+            : $"map{mapIndex}.mul";
+        Files.SetMulPath(filePath, standardKey);
+
+        // Create a fresh Map with the correct dimensions.
+        // (Uses Files.MulPath to resolve the file when _path is null.)
+        var sdkMap = new Map(null, mapIndex, mapIndex, dims.Width, dims.Height);
+        var worldMap = WorldMap.Create(dims.Width, dims.Height, dims.Facet,
+            isUop ? SourceFileType.Uop : SourceFileType.Mul);
 
         var w = dims.Width;
         var h = dims.Height;
@@ -137,21 +182,13 @@ public sealed class UltimaMapReader
             worldMap.Height [x, y] = (sbyte) tile.Z;
         }
 
+        worldMap.Terrain.MarkAllClean();
+        worldMap.Height.MarkAllClean();
+
         return worldMap;
     }
 
     // ── Private helpers ─────────────────────────────────────────────────────
-
-    private static Map MapIndexToSdkMap(int mapIndex) => mapIndex switch
-    {
-        0 => Map.Felucca,
-        1 => Map.Trammel,
-        2 => Map.Ilshenar,
-        3 => Map.Malas,
-        4 => Map.Tokuno,
-        5 => Map.TerMur,
-        _ => Map.Felucca,
-    };
 
     private static int FacetToMapIndex(string facet, string filePath)
     {

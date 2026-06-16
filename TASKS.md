@@ -149,3 +149,26 @@ This file is updated by Codex at the end of every milestone pass.
 - [x] GitHub Actions release workflow triggered by version tags
 - [x] CHANGELOG.md, publish script, release workflow, README updates
 - [x] All 211 tests pass (184 existing + 27 new)
+
+## Milestone 13 — UI polish
+- [x] ZoomIn/ZoomOut centered on viewport center (ZoomAtPoint with viewport center coords)
+- [x] Mouse-wheel zoom toward cursor (fixed HandleScroll removed spurious `* ratio`)
+- [x] Export .mul/.uop via File → Export menu (UltimaMapWriter / UopMapWriter)
+- [x] Project save/load (.uomap serialization, FilePath/IsDirty, title bar with filename + dirty indicator)
+- [x] Brush preview circle on viewport (drawn via SkiaSharp overlay)
+- [x] Grid/render-mode checkmarks (IsChecked bindings on View menu)
+- [x] Replace tool button in toolbar + keyboard shortcut (E)
+- [x] Zoom step refined (1.2× instead of 2× for smoother zooming)
+- [x] Status bar segments (tool name, X/Y, ID/hex, Z, zoom%/blue)
+- [x] Brush radius/strength/hardness numeric readouts (third column in brush grid)
+- [x] Minimap enlarged (200×160 → 224×240 to fill right panel)
+- [x] Unsaved changes confirmation on close (Yes/No/Cancel dialog)
+- [x] MessageBox extended with button enums (MessageBoxButtons/MessageBoxResult)
+- [x] Autosave writes files (TriggerAutosave → UomapAutosave.SaveSnapshot)
+- [x] Drag-and-drop file opening (IDataTransfer.TryGetFiles, DragEnter/Drop handlers)
+- [x] Selection visual feedback (RectSelect/LassoSelect overlay drawing + mouse handlers)
+- [x] Open dialog/recent files support .uomap (file filter routing)
+- [x] LassoSelection.Polygon public accessor for overlay rendering
+- [x] Clear Selection (Escape key clears ActiveSelection)
+- [x] Zoom slider in right panel
+- [x] All 211 tests pass
