@@ -1,21 +1,61 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Ultima;
 using WorldPainterUO.Core;
-
-// 'using Ultima' is intentionally omitted — all SDK access goes through
-// UltimaSDKBridge to avoid the WorldPainterUO.FileFormats.Ultima.* namespace
-// collision. See UltimaSDKBridge.cs for details.
 
 namespace WorldPainterUO.FileFormats;
 
 /// <summary>
 /// Reads Ultima Online map files into a <see cref="WorldMap"/> using the
-/// Ultima SDK via <see cref="UltimaSDKBridge"/>. Block layout, column-major
-/// ordering, and UOP unpacking are all handled by the SDK automatically.
+/// Ultima SDK directly. Block layout, column-major ordering, and UOP
+/// unpacking are all handled by the SDK automatically.
+///
+/// PATH PRIORITY RULES:
+/// 1. Settings path (set via <see cref="SetDataPath"/>) always wins.
+///    This is the user's UO client data folder (radarcol.mul, tiledata.mul, etc.).
+/// 2. Map file directory is used as a fallback ONLY when no Settings path is set.
+///    This handles the simple case where map files live next to client data.
 /// </summary>
 public sealed class UltimaMapReader
 {
+    // ── Path-priority state ─────────────────────────────────────────────────
+
+    private static string? _settingsPath;  // explicitly set by the user in Settings
+    private static string? _fallbackPath;  // map file directory, lower priority
+
+    /// <summary>
+    /// Whether a user-configured UO data path has been set.
+    /// When true, map-file-directory fallback is ignored.
+    /// </summary>
+    public static bool HasSettingsPath => !string.IsNullOrWhiteSpace(_settingsPath);
+
+    /// <summary>
+    /// The active data path the SDK is currently pointing at.
+    /// </summary>
+    public static string? ActivePath => HasSettingsPath ? _settingsPath : _fallbackPath;
+
+    /// <summary>
+    /// Sets the UO data path from user Settings. This path always takes priority
+    /// over the map-file-directory fallback. Passing null or whitespace clears
+    /// the Settings path and falls back to the map directory (if any).
+    /// </summary>
+    public static void SetDataPath(string? dataPath)
+    {
+        if (string.IsNullOrWhiteSpace(dataPath))
+        {
+            _settingsPath = null;
+            if (_fallbackPath != null)
+                Files.SetMulPath(_fallbackPath);
+            return;
+        }
+
+        _settingsPath = dataPath;
+        Files.SetMulPath(dataPath);
+    }
+
+    // ── Dimension detection ─────────────────────────────────────────────────
+
     // Map index -> (Width, Height, Facet)
     private static readonly Dictionary<int, (int Width, int Height, string Facet)> KnownByIndex = new()
     {
@@ -38,7 +78,8 @@ public sealed class UltimaMapReader
         => (long)(width / 8) * (height / 8) * 196L;
 
     /// <summary>
-    /// Detects map dimensions from filename, then file size, then block-count estimate.
+    /// Detects map dimensions from the filename, then file size, then a
+    /// block-count square estimate for unknown custom maps.
     /// </summary>
     public static MapDimensions DetectDimensions(string filePath)
     {
@@ -46,13 +87,13 @@ public sealed class UltimaMapReader
         if (!info.Exists)
             throw new FileNotFoundException("Map file not found.", filePath);
 
-        // 1. Try filename (most reliable — "map0", "map1", etc.)
+        // 1. Filename match (most reliable — "map0", "map1", etc.)
         var baseName = Path.GetFileNameWithoutExtension(filePath).ToLowerInvariant();
         for (var i = 0; i <= 5; i++)
             if (baseName.Contains($"map{i}") && KnownByIndex.TryGetValue(i, out var byIdx))
                 return new MapDimensions(byIdx.Width, byIdx.Height, byIdx.Facet);
 
-        // 2. Try file size (only works for the three facets with unique sizes)
+        // 2. File size (unique for three facets)
         if (KnownBySize.TryGetValue(info.Length, out var bySize))
             return new MapDimensions(bySize.Width, bySize.Height, bySize.Facet);
 
@@ -63,31 +104,54 @@ public sealed class UltimaMapReader
         return new MapDimensions(side, side, "Unknown");
     }
 
+    // ── Map reading ─────────────────────────────────────────────────────────
+
     /// <summary>
-    /// Reads a map file using the Ultima SDK (via <see cref="UltimaSDKBridge"/>)
-    /// and returns a populated <see cref="WorldMap"/>.
-    /// Works for both .mul and .uop files transparently.
+    /// Reads a map file using the Ultima SDK and returns a populated
+    /// <see cref="WorldMap"/>. Works transparently for both .mul and .uop files.
     ///
-    /// The map file directory is registered as a FALLBACK data path only.
-    /// If the user has already configured a UO data path in Settings, that
-    /// path is used instead and the map directory is ignored for SDK lookups.
+    /// The map file directory is registered as a FALLBACK data path only —
+    /// it is ignored when the user has already set a path via
+    /// <see cref="SetDataPath"/>.
     /// </summary>
     public WorldMap Read(string filePath, MapDimensions dims)
     {
+        // Register the map directory as a low-priority fallback.
+        // SetDataPath (Settings) always wins over this.
         var dataDir = Path.GetDirectoryName(filePath) ?? string.Empty;
-
-        // Register map directory as fallback ONLY — will be ignored if a
-        // Settings path is already active. See UltimaSDKBridge for priority rules.
-        UltimaSDKBridge.InitializeFromMapDirectory(dataDir);
+        _fallbackPath = dataDir;
+        if (!HasSettingsPath)
+            Files.SetMulPath(dataDir);
 
         var mapIndex = FacetToMapIndex(dims.Facet, filePath);
-
+        var sdkMap   = MapIndexToSdkMap(mapIndex);
         var worldMap = WorldMap.Create(dims.Width, dims.Height, dims.Facet, SourceFileType.Mul);
 
-        UltimaSDKBridge.ReadMapTiles(mapIndex, worldMap);
+        var w = dims.Width;
+        var h = dims.Height;
+        for (var x = 0; x < w; x++)
+        for (var y = 0; y < h; y++)
+        {
+            var tile = sdkMap.Tiles.GetLandTile(x, y);
+            worldMap.Terrain[x, y] = (ushort)tile.Id;
+            worldMap.Height [x, y] = (sbyte) tile.Z;
+        }
 
         return worldMap;
     }
+
+    // ── Private helpers ─────────────────────────────────────────────────────
+
+    private static Map MapIndexToSdkMap(int mapIndex) => mapIndex switch
+    {
+        0 => Map.Felucca,
+        1 => Map.Trammel,
+        2 => Map.Ilshenar,
+        3 => Map.Malas,
+        4 => Map.Tokuno,
+        5 => Map.TerMur,
+        _ => Map.Felucca,
+    };
 
     private static int FacetToMapIndex(string facet, string filePath)
     {
