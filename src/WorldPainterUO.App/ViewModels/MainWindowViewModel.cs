@@ -239,7 +239,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public void ApplyUoDataPath(string? path)
     {
-        RenderService.TryLoadRadarColors(path);
+        UltimaSDKBridge.InitializeFromSettings(path);         RenderService.TryLoadRadarColors(path);
         MinimapRenderer.TryLoadRadarColors(path);
         RenderService.InvalidateAll();
         MinimapRenderer.Invalidate();
