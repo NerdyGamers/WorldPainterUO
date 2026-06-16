@@ -61,14 +61,13 @@ public static class UltimaSDKBridge
         if (string.IsNullOrWhiteSpace(dataPath))
         {
             _settingsPath = null;
-            // If we have a fallback path already, stay on it.
             if (_fallbackPath != null)
                 ApplyPath(_fallbackPath);
             return;
         }
 
         _settingsPath = dataPath;
-        _radarColLoaded = false; // force radar reload
+        _radarColLoaded = false;
         ApplyPath(dataPath);
     }
 
@@ -81,7 +80,6 @@ public static class UltimaSDKBridge
     {
         _fallbackPath = mapDirectory;
 
-        // Settings path always wins — don't touch the SDK if it's already set.
         if (HasSettingsPath)
             return;
 
@@ -101,8 +99,8 @@ public static class UltimaSDKBridge
                 "Call InitializeFromSettings or InitializeFromMapDirectory first.");
 
         var sdk = SDKMap(mapIndex);
-        var w = worldMap.Width;
-        var h = worldMap.Height;
+        var w = worldMap.Dimensions.Width;
+        var h = worldMap.Dimensions.Height;
 
         for (var x = 0; x < w; x++)
         for (var y = 0; y < h; y++)
@@ -143,7 +141,7 @@ public static class UltimaSDKBridge
     private static void EnsureRadarCol()
     {
         if (_radarColLoaded) return;
-        _ = global::Ultima.RadarCol.GetLandColor(0); // trigger lazy load
+        _ = global::Ultima.RadarCol.GetLandColor(0);
         _radarColLoaded = true;
     }
 }
