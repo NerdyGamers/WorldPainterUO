@@ -63,7 +63,7 @@ public partial class MainWindow : Window
             _needsRender = true;
 
             var prefs = AppPreferences.Load();
-            if (string.IsNullOrWhiteSpace(prefs.UoDataPath))
+            // Apply saved UO data path on startup — this initializes the SDK bridge         // with the Settings path before any map is opened, so radar colors and         // future art/tiledata loading all use the correct folder regardless of         // where the user stores their map files.         if (!string.IsNullOrWhiteSpace(prefs.UoDataPath))             ViewModel.ApplyUoDataPath(prefs.UoDataPath);          if (string.IsNullOrWhiteSpace(prefs.UoDataPath))
             {
                 await MessageBox.ShowDialog(
                     this,
