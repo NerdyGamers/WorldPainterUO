@@ -67,21 +67,23 @@ public sealed class UltimaMapReader
     /// Reads a map file using the Ultima SDK (via <see cref="UltimaSDKBridge"/>)
     /// and returns a populated <see cref="WorldMap"/>.
     /// Works for both .mul and .uop files transparently.
+    ///
+    /// The map file directory is registered as a FALLBACK data path only.
+    /// If the user has already configured a UO data path in Settings, that
+    /// path is used instead and the map directory is ignored for SDK lookups.
     /// </summary>
     public WorldMap Read(string filePath, MapDimensions dims)
     {
         var dataDir = Path.GetDirectoryName(filePath) ?? string.Empty;
 
-        // Initialize the bridge (safe to call multiple times — no-op if same path)
-        UltimaSDKBridge.Initialize(dataDir);
+        // Register map directory as fallback ONLY — will be ignored if a
+        // Settings path is already active. See UltimaSDKBridge for priority rules.
+        UltimaSDKBridge.InitializeFromMapDirectory(dataDir);
 
         var mapIndex = FacetToMapIndex(dims.Facet, filePath);
 
         var worldMap = WorldMap.Create(dims.Width, dims.Height, dims.Facet, SourceFileType.Mul);
 
-        // Delegate all tile reading to the bridge — it uses the SDK's pre-built
-        // static Map instances (Felucca, Trammel, etc.) which handle block ordering
-        // and UOP decompression automatically.
         UltimaSDKBridge.ReadMapTiles(mapIndex, worldMap);
 
         return worldMap;
